@@ -1,0 +1,434 @@
+@import "tailwindcss";
+
+/* EduPlay design: Fredoka for headings, Nunito for everything else. */
+@theme {
+  --font-sans: 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Fredoka', 'Nunito', system-ui, sans-serif;
+}
+
+@layer base {
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+  }
+}
+
+/* Chunky surfaces: thick border plus a solid "ledge" shadow in the border colour. */
+.chunky {
+  background: #fff;
+  border: 3px solid #EDEFF6;
+  border-radius: 24px;
+  box-shadow: 0 5px 0 #EDEFF6;
+}
+
+/* Buttons that press down. Set --edge to the ledge colour. */
+.btn-3d {
+  box-shadow: 0 5px 0 var(--edge, #E3E5EC);
+  transition: transform 120ms ease, box-shadow 120ms ease, background-color 150ms ease;
+}
+.btn-3d:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 1px 0 var(--edge, #E3E5EC);
+}
+
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 197, 61, 0.6); } 70% { box-shadow: 0 0 0 16px rgba(255, 197, 61, 0); } }
+.animate-bob { animation: bob 3s ease-in-out infinite; }
+.animate-glow { animation: glow 2.4s infinite; }
+.animate-pop-soft { animation: pop-in 0.25s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-bob, .animate-glow, .animate-pop-soft { animation: none; }
+  .btn-3d { transition: none; }
+}
+
+:root {
+  --color-primary: #3B4FE0;
+  --color-primary-hover: #2F40BD;
+  --color-secondary: #12A594;
+  --color-secondary-hover: #0E8577;
+  --text-primary: #1E2233;
+  --text-secondary: #6B7280;
+  --surface: #FFFFFF;
+  --bg-page: #F5F6FA;
+  --border: #E3E5EC;
+  font-family: var(--font-sans);
+
+  /* Brand tokens used by the student app. Defaults are the EduPlay brand; [data-stage] overrides them. */
+  --brand: #3B4FE0;
+  --brand-hover: #3446D6;
+  --brand-edge: #2A3BB8;
+  --brand-soft: #EEF0FE;
+  --brand-line: #C7CDF8;
+  --brand-to: #6B7BF0;
+  --page: #F5F6FA;
+  --page-bg: var(--page);
+  --chrome: #FFFFFF;
+  --card-line: #EDEFF6;
+  --card-r: 24px;
+  --ledge: 5px;
+}
+
+/* ---------- Stage themes (getGradeStage on the enrolled class) ----------
+   primary 1–5  "Sky garden": sky-to-sand page, section colours, Pip the owl, sticker tiles.
+   middle 6–10  "Notebook": graph-paper page, science doodles printed inside the hero.
+   senior 11–12 "Focus desk": plain page, flat cards, faint formula sketches in the hero. */
+[data-stage='primary'] {
+  --brand: #6D3FE0;
+  --brand-hover: #6336D1;
+  --brand-edge: #4E27AE;
+  --brand-soft: #F2ECFF;
+  --brand-line: #D9CCFB;
+  --brand-to: #C36BE8;
+  --page: #FFF8EC;
+  --page-bg: url('/doodles/primary-confetti.svg') 0 0 / 280px repeat, linear-gradient(180deg, #E3F3FF 0, #FFF8EC 480px) #FFF8EC;
+  --chrome: #FFFDF8;
+  --card-line: #F2E3C4;
+  --card-r: 30px;
+}
+[data-stage='middle'] {
+  --page: #F4F7FF;
+  --page-bg:
+    linear-gradient(rgba(59, 79, 224, 0.05) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, rgba(59, 79, 224, 0.05) 1px, transparent 1px) 0 0 / 28px 28px,
+    #F4F7FF;
+  --doodles: url('/doodles/middle.svg');
+  --doodle-size: 360px;
+}
+[data-stage='senior'] {
+  --brand: #33459A;
+  --brand-hover: #2C3C88;
+  --brand-edge: #202C66;
+  --brand-soft: #EDF0F8;
+  --brand-line: #CBD2E8;
+  --brand-to: #52649F;
+  --page: #F4F5F8;
+  --card-line: #E4E7EE;
+  --card-r: 16px;
+  --ledge: 2px;
+  --doodles: url('/doodles/senior.svg');
+  --doodle-size: 420px;
+}
+.stage-bg { background: var(--page-bg); }
+.stage-chrome { background-color: var(--chrome); }
+
+/* Doodles printed in white inside banners. Only middle / senior define --doodles; without it the mask
+   would be empty and the layer would paint solid white, so it stays hidden elsewhere. */
+.hero-doodles { display: none; }
+[data-stage='middle'] .hero-doodles,
+[data-stage='senior'] .hero-doodles {
+  display: block;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: #FFFFFF;
+  -webkit-mask: var(--doodles) 0 0 / var(--doodle-size) repeat;
+  mask: var(--doodles) 0 0 / var(--doodle-size) repeat;
+}
+.hero-kids {
+  background: linear-gradient(180deg, #BDE5FF 0%, #E6F5FF 78%);
+  border: 3px solid #A6D6F7;
+  box-shadow: 0 6px 0 #A6D6F7;
+}
+
+/* Section icons: brand-coloured by default, one colour per section for Class 1–5. */
+.section-icon { background: #F1F3FB; color: #6B7280; }
+.page-icon { background: var(--brand-soft); color: var(--brand); }
+.nav-item[data-active] .section-icon { background: var(--brand); color: #FFFFFF; }
+[data-stage='primary'] .section-icon,
+[data-stage='primary'] .page-icon,
+[data-stage='middle'] .section-icon,
+[data-stage='middle'] .page-icon { background: var(--tint-soft); color: var(--tint); }
+[data-stage='primary'] .nav-item[data-active] {
+  background: var(--tint-soft);
+  border-color: color-mix(in oklab, var(--tint) 30%, white);
+  color: var(--tint);
+}
+[data-stage='primary'] .nav-item[data-active] .section-icon {
+  background: var(--tint);
+  color: #FFFFFF;
+  box-shadow: 0 3px 0 color-mix(in oklab, var(--tint) 70%, black);
+}
+[data-stage='primary'] .m-nav { color: var(--tint); }
+[data-stage='primary'] .m-nav[data-active] .m-bubble { background: var(--tint-soft); }
+/* Focus timer colour (Focus page and the floating mini timer): brand, or the mint Focus colour for Class 1–5. */
+.stage-bg { --ring: var(--brand); --ring-soft: var(--brand-soft); }
+[data-stage='primary'].stage-bg { --ring: #0C8F78; --ring-soft: #DDF5EE; }
+[data-stage='primary'] .page-icon { transform: rotate(-6deg); box-shadow: 0 4px 0 color-mix(in oklab, var(--tint) 35%, white); }
+[data-stage='primary'] .page-title::after {
+  content: '';
+  display: block;
+  width: 92px;
+  height: 10px;
+  margin-top: 4px;
+  background: var(--tint, var(--brand));
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='92' height='10' viewBox='0 0 92 10'%3E%3Cpath d='M3 6q7-6 14 0t14 0t14 0t14 0t14 0t14 0' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='92' height='10' viewBox='0 0 92 10'%3E%3Cpath d='M3 6q7-6 14 0t14 0t14 0t14 0t14 0t14 0' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat;
+}
+
+/* Stat tiles and subject cards become pastel stickers for Class 1–5. */
+.stat-icon { background: var(--tint-soft); color: var(--tint); }
+[data-stage='primary'] .stat-tile,
+[data-stage='primary'] .subject-card {
+  background: var(--tint-soft);
+  border-color: color-mix(in oklab, var(--tint) 32%, white);
+  --edge: color-mix(in oklab, var(--tint) 32%, white);
+  box-shadow: 0 5px 0 var(--edge);
+}
+[data-stage='primary'] .stat-icon,
+[data-stage='primary'] .subject-card .subject-glyph { background: #FFFFFF; }
+[data-stage='primary'] .subject-card:hover { transform: translateY(-3px) rotate(-1deg); }
+
+/* A 7-year-old should not get a navy "exam notice": it becomes a sunny sticky note. */
+[data-stage='primary'] .ann-exam { background: #FFF4CC; border-color: #FFD97A; color: #1E2233; box-shadow: 0 5px 0 #FFD97A; }
+[data-stage='primary'] .ann-exam .ann-tag { color: #8A5A14; }
+
+[data-stage='senior'] .btn-3d { box-shadow: 0 2px 0 var(--edge, #E3E5EC); }
+[data-stage='senior'] .btn-3d:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 1px 0 var(--edge, #E3E5EC); }
+[data-stage='senior'] .animate-bob,
+[data-stage='senior'] .animate-glow { animation: none; }
+
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+@keyframes drift { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(14px); } }
+.animate-spin-slow { animation: spin-slow 24s linear infinite; }
+.animate-drift { animation: drift 9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin-slow, .animate-drift { animation: none; }
+  [data-stage='primary'] .subject-card:hover { transform: none; }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+}
+
+/* Accessibility focus ring (WCAG 2.1 AA). In the base layer so a component's own focus style can replace it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+}
+
+/* Smooth custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F2F6;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #DDE1EC;
+  border-radius: 99px;
+  border: 3px solid #F5F6FA;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Shimmer animation for skeleton loaders (FR-4) */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg, #EDEFF5 25%, #F7F8FC 50%, #EDEFF5 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ---------- Bento design system ---------- */
+.bento {
+  background: var(--surface);
+  border: 3px solid #EDEFF6;
+  border-radius: 1.5rem;
+  box-shadow: 0 5px 0 #EDEFF6;
+}
+
+.bento-hover {
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.bento-hover:hover {
+  transform: translateY(-2px);
+  border-color: #C7CDF8;
+  box-shadow: 0 5px 0 #C7CDF8;
+}
+
+.bg-mesh {
+  background:
+    radial-gradient(40rem 24rem at 10% -10%, rgba(59, 79, 224, 0.14), transparent 60%),
+    radial-gradient(36rem 22rem at 95% 0%, rgba(18, 165, 148, 0.14), transparent 60%),
+    radial-gradient(30rem 20rem at 60% 110%, rgba(236, 72, 153, 0.07), transparent 60%);
+}
+
+.bg-dots {
+  background-image: radial-gradient(rgba(30, 34, 51, 0.08) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.text-gradient-brand {
+  background: linear-gradient(90deg, #3B4FE0 0%, #5B6CF0 45%, #12A594 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 450ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .bento-hover {
+    animation: none;
+    transition: none;
+  }
+  .bento-hover:hover {
+    transform: none;
+  }
+}
+
+/* Soft brand glow behind the home screens, fading into the page background. */
+.page-glow {
+  background-color: var(--bg-page);
+  background-image:
+    radial-gradient(60rem 28rem at 15% -8rem, rgba(59, 79, 224, 0.12), transparent 70%),
+    radial-gradient(50rem 26rem at 90% -6rem, rgba(18, 165, 148, 0.12), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+/* ---------- Landing page motion ---------- */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes gradient-pan {
+  from { background-position: 0% 50%; }
+  to { background-position: 200% 50%; }
+}
+
+@keyframes grow-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes pop-in {
+  0% { transform: scale(0); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(59, 79, 224, 0.45); }
+  100% { box-shadow: 0 0 0 14px rgba(59, 79, 224, 0); }
+}
+
+.animate-float { animation: float 6s ease-in-out infinite; }
+.animate-grow-x { transform-origin: left; animation: grow-x 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.6s both; }
+.animate-pop { animation: pop-in 0.4s ease-out both; }
+.animate-pulse-ring { animation: pulse-ring 2s ease-out infinite; }
+
+.animate-gradient-text {
+  background-image: linear-gradient(90deg, #3B4FE0, #12A594, #3B4FE0);
+  background-size: 200% auto;
+  animation: gradient-pan 6s linear infinite;
+}
+
+/* Landing: underline that draws itself, subject marquee, XP that floats up. */
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.animate-draw { stroke-dasharray: 320; stroke-dashoffset: 320; animation: draw 1.1s cubic-bezier(0.6, 0, 0.2, 1) 0.7s forwards; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+.animate-marquee { animation: marquee 45s linear infinite; }
+.marquee:hover .animate-marquee { animation-play-state: paused; }
+@keyframes fly-up {
+  0% { transform: translateY(6px); opacity: 0; }
+  15%, 65% { opacity: 1; }
+  100% { transform: translateY(-34px); opacity: 0; }
+}
+.animate-fly-up { animation: fly-up 3s ease-out infinite; }
+@keyframes tilt { 0%, 100% { transform: rotate(-2deg); } 50% { transform: rotate(-0.5deg) translateY(-6px); } }
+.animate-tilt { animation: tilt 7s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-draw { stroke-dashoffset: 0; animation: none; }
+  .animate-marquee, .animate-fly-up, .animate-tilt { animation: none; }
+}
+
+/* Landing hero: sky and confetti on the left (Class 1–5), graph paper through the middle (6–10),
+   faint formulas on the right (11–12). */
+.landing-hero {
+  background:
+    linear-gradient(rgba(59, 79, 224, 0.045) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(59, 79, 224, 0.045) 1px, transparent 1px) 0 0 / 32px 32px,
+    radial-gradient(40rem 28rem at 0% 0%, #D9EEFF, transparent 70%),
+    radial-gradient(34rem 24rem at 100% 5%, #FFF0C9, transparent 70%),
+    radial-gradient(40rem 26rem at 75% 100%, #ECE6FF, transparent 70%),
+    #F7F8FC;
+}
+.landing-mix-left,
+.landing-mix-right { position: absolute; inset: 0; pointer-events: none; }
+.landing-mix-left {
+  background: url('/doodles/primary-confetti.svg') 0 0 / 260px repeat;
+  -webkit-mask-image: linear-gradient(90deg, black, transparent 42%);
+  mask-image: linear-gradient(90deg, black, transparent 42%);
+}
+.landing-mix-right {
+  background: url('/doodles/senior.svg') 0 0 / 420px repeat;
+  -webkit-mask-image: linear-gradient(270deg, black, transparent 40%);
+  mask-image: linear-gradient(270deg, black, transparent 40%);
+}
+
+/* Scroll reveal. Content only starts hidden once JS marks the page ready, so it never disappears without JS. */
+.reveal-ready [data-reveal] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.reveal-ready [data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float,
+  .animate-grow-x,
+  .animate-pop,
+  .animate-pulse-ring,
+  .animate-gradient-text {
+    animation: none;
+  }
+  .reveal-ready [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
