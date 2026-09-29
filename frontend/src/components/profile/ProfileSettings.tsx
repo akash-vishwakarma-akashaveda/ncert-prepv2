@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   LogOut,
   CheckCircle2,
@@ -11,6 +11,9 @@ import {
   Download,
   Check,
   Sparkles,
+  Gift,
+  Copy,
+  Share2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useProgress } from '../../context/ProgressContext';
@@ -19,7 +22,75 @@ import { classLabel, currentStreak } from '../../data/gamification';
 import { ClassTile } from '../home/ClassGrid';
 import { CUTE_CHARACTERS, UserAvatar } from '../../data/avatars';
 import { XpHistoryCard } from './XpHistoryCard';
+import { STREAMS, classHasStreams, getStream, isInStream } from '../../data/streams';
 import { LeaderboardService } from '../../services/leaderboard';
+import { ReferralService, ReferralStats } from '../../services/referrals';
+
+const ReferralCard: React.FC = () => {
+  const [stats, setStats] = useState<ReferralStats | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    ReferralService.getMyStats().then(setStats).catch(() => undefined);
+  }, []);
+
+  if (!stats?.code) return null;
+
+  const shareLink = `${window.location.origin}/?ref=${stats.code}`;
+
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard access can be denied; the code/link is still visible to copy by hand.
+    }
+  };
+
+  return (
+    <div className="bg-white border-[3px] border-[color:var(--card-line)] rounded-[26px] p-5 sm:p-6 space-y-4">
+      <div className="flex items-center gap-3">
+        <span className="w-10 h-10 rounded-[14px] bg-[#FDE6F0] text-[#C9447F] flex items-center justify-center shrink-0">
+          <Gift className="w-5 h-5" />
+        </span>
+        <div>
+          <h3 className="text-base font-extrabold text-[#1E2233]">Invite friends</h3>
+          <p className="text-xs text-[#6B7280]">Share your code — new students can enter it when they sign up.</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-[16px] bg-[color:var(--page)] border-2 border-dashed border-[#D7DCEF]">
+          <span className="font-display text-lg tracking-[0.08em] text-[#1E2233]">{stats.code}</span>
+        </div>
+        <button
+          onClick={() => copy(stats.code!)}
+          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-extrabold text-[#1E2233] bg-white border-2 border-[#E3E5EC] hover:bg-[#F7F8FC] rounded-[14px] cursor-pointer"
+        >
+          <Copy className="w-3.5 h-3.5" /> Copy code
+        </button>
+        <button
+          onClick={() => copy(shareLink)}
+          className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-extrabold text-[color:var(--brand)] bg-[color:var(--brand-soft)] border-2 border-[color:var(--brand-line)] rounded-[14px] cursor-pointer"
+        >
+          <Share2 className="w-3.5 h-3.5" /> {copied ? 'Copied!' : 'Copy invite link'}
+        </button>
+      </div>
+
+      <div className="flex gap-6 pt-3 border-t-2 border-[color:var(--card-line)]">
+        <div>
+          <p className="font-display text-xl leading-none text-[#1E2233]">{stats.referredThisMonth}</p>
+          <p className="text-[11px] font-bold text-[#6B7280] mt-1">This month</p>
+        </div>
+        <div>
+          <p className="font-display text-xl leading-none text-[#1E2233]">{stats.referredTotal}</p>
+          <p className="text-[11px] font-bold text-[#6B7280] mt-1">All time</p>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 interface ProfileSettingsProps {
   videoMap: Map<string, Video>;
@@ -30,7 +101,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   videoMap,
   onOpenAdmin,
 }) => {
-  const { user, isDemoUser, isAdmin, signOut, updateProfile, deleteAccount, reauthProviderId, reauthenticate } = useAuth();
+  const { user, isAdmin, signOut, signOutAllDevices, updateProfile, deleteAccount, reauthProviderId, reauthenticate } = useAuth();
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
   const {
     completedCount,
     favoritesCount,
@@ -55,6 +127,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   const [selectedGrade, setSelectedGrade] = useState(user?.grade_preference || '');
   const [studyGoal, setStudyGoal] = useState<number>(user?.study_goal_minutes || 25);
   const [focusSubjects, setFocusSubjects] = useState<string[]>(user?.focus_subjects || []);
+  const [stream, setStream] = useState<string>(user?.stream || '');
   const [selectedAvatar, setSelectedAvatar] = useState<string>(user?.photoURL || 'owl');
   const [avatarSaved, setAvatarSaved] = useState(false);
 
@@ -104,6 +177,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         grade_preference: selectedGrade,
         study_goal_minutes: studyGoal,
         focus_subjects: focusSubjects.filter((s) => subjectsForSelectedGrade.includes(s)),
+        stream: classHasStreams(selectedGrade) ? stream : '',
         photoURL: selectedAvatar,
       };
       await updateProfile({
@@ -111,6 +185,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         grade_preference: selectedGrade,
         study_goal_minutes: studyGoal,
         focus_subjects: focusSubjects.filter((s) => subjectsForSelectedGrade.includes(s)),
+        stream: classHasStreams(selectedGrade) ? stream : '',
         photoURL: selectedAvatar,
       });
       // Immediately migrate leaderboard entry to ensure strict class isolation
@@ -211,11 +286,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
                 >
                   {isAdmin ? 'Administrator' : 'Student Account'}
                 </span>
-                {isDemoUser && (
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#FFF6E2] border border-[#FFD97A] text-[#8A5A14]">
-                    Demo Account
-                  </span>
-                )}
               </div>
               <p className="text-xs text-[#6B7280] mt-0.5">
                 {user.email || 'Verified Student Profile'}
@@ -288,6 +358,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Referral Code */}
+      {!isAdmin && <ReferralCard />}
 
       {/* Choose Your Cute Study Avatar */}
       <section aria-label="Choose your avatar" className="bg-white border-[3px] border-[color:var(--card-line)] rounded-[26px] p-5 sm:p-6 space-y-4">
@@ -426,6 +499,39 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           </div>
         )}
 
+        {classHasStreams(selectedGrade) && (
+          <div>
+            <label className="block text-xs font-extrabold text-[#1E2233] mb-1.5">
+              Stream <span className="font-semibold text-[#6B7280]">(its subjects lead; the rest stay open)</span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {STREAMS.map((option) => {
+                const active = stream === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => {
+                      setStream(active ? '' : option.id);
+                      if (!active) {
+                        setFocusSubjects(subjectsForSelectedGrade.filter((subject) => isInStream(subject, getStream(option.id))));
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-xs font-extrabold rounded-[14px] border transition-all cursor-pointer ${
+                      active
+                        ? 'border-[color:var(--brand)] bg-[#EEEDFE] text-[color:var(--brand)]'
+                        : 'border-[#E3E5EC] bg-white text-[#6B7280] hover:bg-[color:var(--page)]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="block text-xs font-extrabold text-[#1E2233] mb-1.5">
             Focus Subjects <span className="font-semibold text-[#6B7280]">(shown first on your dashboard)</span>
@@ -513,6 +619,28 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           >
             <Download className="w-3.5 h-3.5" />
             <span>Export My Data (JSON)</span>
+          </button>
+        </div>
+
+        <div className="pt-3 border-t border-[#E3E5EC] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <p className="text-xs font-extrabold text-[#1E2233]">Active sessions</p>
+            <p className="text-[11px] font-semibold text-[#6B7280]">
+              Signs you out on every device, including this one — use this if you think someone else has access.
+            </p>
+          </div>
+
+          <button
+            onClick={async () => {
+              setLoggingOutAll(true);
+              await signOutAllDevices();
+              setLoggingOutAll(false);
+            }}
+            disabled={loggingOutAll}
+            className="self-start sm:self-auto flex items-center gap-1.5 px-3.5 py-2 text-xs font-extrabold text-[#6B7280] bg-[color:var(--page)] hover:bg-[color:var(--card-line)] border-2 border-[#E3E5EC] rounded-[14px] transition-colors cursor-pointer disabled:opacity-60 shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>{loggingOutAll ? 'Signing out…' : 'Log out of all devices'}</span>
           </button>
         </div>
 

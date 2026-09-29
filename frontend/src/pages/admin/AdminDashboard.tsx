@@ -10,11 +10,13 @@ import {
   Shield,
   Sliders,
   Eye,
+  Gift,
 } from 'lucide-react';
 import { ChapterNotes, Doubt, Feedback, Video } from '../../types';
 import { CurriculumRecords, DoubtsService, NotesService, countStudentsByClass } from '../../services/content';
-import { FirestoreService } from '../../services/firestore';
+import { FeedbackService } from '../../services/feedback';
 import { useAuth } from '../../context/AuthContext';
+import { getSocket } from '../../services/socket';
 import { buildAdminTree } from './adminTree';
 import { useToast } from './adminUi';
 import { OverviewSection } from './OverviewSection';
@@ -25,8 +27,9 @@ import { NotesSection } from './NotesSection';
 import { DoubtsSection } from './DoubtsSection';
 import { FeedbackSection } from './FeedbackSection';
 import { DataSection } from './DataSection';
+import { InsightsSection } from './InsightsSection';
 
-export type AdminSectionId = 'overview' | 'student-control' | 'curriculum' | 'videos' | 'notes' | 'doubts' | 'feedback' | 'data';
+export type AdminSectionId = 'overview' | 'student-control' | 'curriculum' | 'videos' | 'notes' | 'doubts' | 'feedback' | 'data' | 'insights';
 
 export interface AdminNavigateOptions {
   notesKey?: string;
@@ -100,7 +103,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   }, [notify]);
 
   const reloadFeedback = useCallback(async () => {
-    setFeedbacks(await FirestoreService.getFeedbackList());
+    setFeedbacks(await FeedbackService.listAll());
   }, []);
 
   useEffect(() => {
@@ -109,6 +112,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     reloadFeedback();
     countStudentsByClass().then(setStudentStats);
   }, [reloadNotes, reloadDoubts, reloadFeedback]);
+
+  // Live lists: the backend emits these to the "admins" room, so new or changed doubts and feedback
+  // show up without a page refresh. DoubtsProvider owns the socket's connect/disconnect.
+  useEffect(() => {
+    const socket = getSocket();
+    const onFeedback = () => void reloadFeedback().catch(() => {});
+    socket.on('doubt:new', reloadDoubts);
+    socket.on('doubt:updated', reloadDoubts);
+    socket.on('feedback:changed', onFeedback);
+    return () => {
+      socket.off('doubt:new', reloadDoubts);
+      socket.off('doubt:updated', reloadDoubts);
+      socket.off('feedback:changed', onFeedback);
+    };
+  }, [reloadDoubts, reloadFeedback]);
 
   const navigate = (next: AdminSectionId, options: AdminNavigateOptions = {}) => {
     setNavOptions(options);
@@ -132,6 +150,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     { id: 'doubts', label: 'Doubts', icon: <MessageCircleQuestion className="w-4 h-4" />, badge: openDoubts },
     { id: 'feedback', label: 'Feedback', icon: <MessageSquare className="w-4 h-4" />, badge: newFeedback },
     { id: 'data', label: 'Data & Sync', icon: <Database className="w-4 h-4" /> },
+    { id: 'insights', label: 'Referrals & Watch Hours', icon: <Gift className="w-4 h-4" /> },
   ];
 
   return (
@@ -250,6 +269,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               initialDoubtId={navOptions.doubtId || initialNavOptions?.doubtId}
               videos={allVideos}
               onSelectVideo={onSelectVideo}
+              tree={tree}
             />
           )}
           {activeSection === 'feedback' && (
@@ -258,6 +278,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           {activeSection === 'data' && (
             <DataSection tree={tree} videoCount={allVideos.length} onRefreshCatalog={onRefreshCatalog} notify={notify} />
           )}
+          {activeSection === 'insights' && <InsightsSection />}
         </main>
       </div>
       {toastNode}

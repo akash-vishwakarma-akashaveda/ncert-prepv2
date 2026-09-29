@@ -10,6 +10,9 @@ import {
   ExternalLink,
   Flame,
   Pin,
+  Plus,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { Video } from '../../types';
 import {
@@ -40,6 +43,7 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
   const [saving, setSaving] = useState(false);
 
   // Announcement Form State
+  const [editingAnnId, setEditingAnnId] = useState<string | null>(null);
   const [annActive, setAnnActive] = useState(true);
   const [annTitle, setAnnTitle] = useState('');
   const [annMessage, setAnnMessage] = useState('');
@@ -47,6 +51,29 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
   const [annTarget, setAnnTarget] = useState('all');
   const [annActionLabel, setAnnActionLabel] = useState('');
   const [annActionUrl, setAnnActionUrl] = useState('');
+  const [deletingAnnId, setDeletingAnnId] = useState<string | null>(null);
+
+  const resetAnnForm = () => {
+    setEditingAnnId(null);
+    setAnnActive(true);
+    setAnnTitle('');
+    setAnnMessage('');
+    setAnnTone('exam');
+    setAnnTarget('all');
+    setAnnActionLabel('');
+    setAnnActionUrl('');
+  };
+
+  const editAnnouncement = (ann: DashboardAnnouncement) => {
+    setEditingAnnId(ann.id);
+    setAnnActive(ann.isActive);
+    setAnnTitle(ann.title);
+    setAnnMessage(ann.message);
+    setAnnTone(ann.tone);
+    setAnnTarget(ann.targetClass);
+    setAnnActionLabel(ann.actionLabel || '');
+    setAnnActionUrl(ann.actionUrl || '');
+  };
 
   // Spotlight Form State
   const [spotlightClass, setSpotlightClass] = useState('10');
@@ -66,15 +93,6 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
   useEffect(() => {
     DashboardControlService.getConfig().then((cfg) => {
       setConfig(cfg);
-      if (cfg.announcement) {
-        setAnnActive(cfg.announcement.isActive);
-        setAnnTitle(cfg.announcement.title);
-        setAnnMessage(cfg.announcement.message);
-        setAnnTone(cfg.announcement.tone);
-        setAnnTarget(cfg.announcement.targetClass);
-        setAnnActionLabel(cfg.announcement.actionLabel || '');
-        setAnnActionUrl(cfg.announcement.actionUrl || '');
-      }
       setPreviewEnabled(cfg.policy.freePreviewEnabled);
       setPreviewCount(cfg.policy.freePreviewCount);
       setGuestNotes(cfg.policy.allowGuestNotes);
@@ -108,12 +126,11 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
     [videos, spotlightVideoId]
   );
 
-  // Save Announcement
+  // Create or update an announcement, depending on whether one is being edited.
   const handleSaveAnnouncement = async () => {
     setSaving(true);
     try {
-      const ann: DashboardAnnouncement = {
-        id: config?.announcement?.id || `ann-${Date.now()}`,
+      const fields = {
         title: annTitle.trim() || 'Announcement',
         message: annMessage.trim(),
         tone: annTone,
@@ -121,15 +138,37 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
         actionLabel: annActionLabel.trim() || undefined,
         actionUrl: annActionUrl.trim() || undefined,
         isActive: annActive,
-        createdAt: Date.now(),
       };
-      await DashboardControlService.setAnnouncement(ann);
-      setConfig((prev) => (prev ? { ...prev, announcement: ann } : null));
-      notify('Student Dashboard Announcement broadcast successfully!', 'success');
+      if (editingAnnId) {
+        await DashboardControlService.updateAnnouncement(editingAnnId, fields);
+        setConfig((prev) =>
+          prev ? { ...prev, announcements: prev.announcements.map((a) => (a.id === editingAnnId ? { ...a, ...fields } : a)) } : null
+        );
+        notify('Announcement updated!', 'success');
+      } else {
+        const created = await DashboardControlService.createAnnouncement(fields);
+        setConfig((prev) => (prev ? { ...prev, announcements: [created, ...prev.announcements] } : null));
+        notify('Announcement broadcast to students!', 'success');
+      }
+      resetAnnForm();
     } catch (err) {
       notify('Failed to publish announcement. Please retry.', 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (id: string) => {
+    setDeletingAnnId(id);
+    try {
+      await DashboardControlService.deleteAnnouncement(id);
+      setConfig((prev) => (prev ? { ...prev, announcements: prev.announcements.filter((a) => a.id !== id) } : null));
+      if (editingAnnId === id) resetAnnForm();
+      notify('Announcement deleted.', 'success');
+    } catch (err) {
+      notify('Failed to delete announcement.', 'error');
+    } finally {
+      setDeletingAnnId(null);
     }
   };
 
@@ -196,14 +235,18 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
     }
   };
 
-  // Tone badge styles
-  const toneStyles = {
-    // Matches the student banner (HomePage TONES): navy for Class 6–12; Class 1–5 get a sunny note instead.
+  // Tone badge styles — matches the student banner (HomePage TONES): navy for Class 6–12;
+  // Class 1–5 get a sunny note instead.
+  const TONE_STYLES: Record<'exam' | 'info' | 'success' | 'warning', string> = {
     exam: 'bg-[#1E2233] border-[#2C3350] text-white',
     info: 'bg-[#EEF0FE]/80 border-[#C7CDF8] text-indigo-950',
     success: 'bg-[#E7F7F1]/80 border-[#A9E6D3] text-emerald-950',
     warning: 'bg-[#FFF6E2]/80 border-[#FFD97A] text-[#5E3D0C]',
-  }[annTone];
+  };
+  const toneStyles = TONE_STYLES[annTone];
+  const simClassAnns = (config?.announcements || []).filter(
+    (a) => a.isActive && (a.targetClass === 'all' || a.targetClass === simClass)
+  );
 
   return (
     <div className="space-y-6">
@@ -211,8 +254,9 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
         title="Student Dashboard Control"
         description="Directly manage live announcements, spotlight revision lessons, and access rules that shape the student dashboard experience."
         actions={
+          // /app is this admin console for an admin account, so the student-facing view is /browse.
           <a
-            href="/app"
+            href="/browse"
             target="_blank"
             rel="noreferrer"
             className={`${secondaryButton} gap-2 text-[#3B4FE0] hover:text-[#2F40BD]`}
@@ -252,11 +296,65 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
 
       {/* 1. BROADCAST ANNOUNCEMENTS TAB */}
       {subTab === 'announcement' && (
+        <div className="space-y-6">
+          <Card className="p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-[#1E2233]">
+                Your Announcements {config ? `(${config.announcements.length})` : ''}
+              </h3>
+              {editingAnnId && (
+                <button onClick={resetAnnForm} className={`${secondaryButton} gap-1.5`}>
+                  <Plus className="w-3.5 h-3.5" /> New announcement
+                </button>
+              )}
+            </div>
+            {!config || config.announcements.length === 0 ? (
+              <p className="text-xs text-[#6B7280] py-2">No announcements yet. Create one below.</p>
+            ) : (
+              <ul className="space-y-2">
+                {config.announcements.map((a) => (
+                  <li
+                    key={a.id}
+                    className={`flex items-center gap-3 p-3 rounded-[16px] border-2 ${
+                      editingAnnId === a.id ? 'border-[#3B4FE0] bg-[#EEF0FD]/60' : 'border-[#E3E5EC] bg-[#F8F9FD]'
+                    }`}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full shrink-0 ${a.isActive ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                      title={a.isActive ? 'Active' : 'Inactive'}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-extrabold text-[#1E2233] truncate">{a.title}</p>
+                      <p className="text-[11px] text-[#6B7280] truncate">
+                        {a.targetClass === 'all' ? 'All Classes' : classLabel(a.targetClass)} · {a.tone} · {a.message || 'No message'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => editAnnouncement(a)}
+                      className="shrink-0 p-2 rounded-xl border-2 border-[#E3E5EC] hover:bg-white text-[#3B4FE0] cursor-pointer"
+                      title="Edit"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteAnnouncement(a.id)}
+                      disabled={deletingAnnId === a.id}
+                      className="shrink-0 p-2 rounded-xl border-2 border-[#E3E5EC] hover:bg-white text-[#C24A2C] cursor-pointer disabled:opacity-50"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-[#E3E5EC] pb-3">
               <div>
-                <h3 className="text-base font-extrabold text-[#1E2233]">Broadcast Announcement</h3>
+                <h3 className="text-base font-extrabold text-[#1E2233]">{editingAnnId ? 'Edit Announcement' : 'New Announcement'}</h3>
                 <p className="text-xs text-[#6B7280]">Display a prominent announcement banner on student dashboards.</p>
               </div>
               <label className="flex items-center gap-2 text-xs font-extrabold cursor-pointer">
@@ -348,13 +446,20 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={handleSaveAnnouncement}
-                disabled={saving}
-                className={`${primaryButton} w-full py-3`}
-              >
-                {saving ? 'Broadcasting...' : 'Publish to Student Dashboards'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveAnnouncement}
+                  disabled={saving}
+                  className={`${primaryButton} flex-1 py-3`}
+                >
+                  {saving ? 'Saving...' : editingAnnId ? 'Update Announcement' : 'Publish to Student Dashboards'}
+                </button>
+                {editingAnnId && (
+                  <button onClick={resetAnnForm} className={`${secondaryButton} py-3`}>
+                    Cancel
+                  </button>
+                )}
+              </div>
             </div>
           </Card>
 
@@ -408,6 +513,7 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
               )}
             </Card>
           </div>
+        </div>
         </div>
       )}
 
@@ -655,19 +761,22 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
               </span>
             </div>
 
-            {/* Simulated Live Announcement */}
-            {config?.announcement?.isActive &&
-              (config.announcement.targetClass === 'all' || config.announcement.targetClass === simClass) && (
-                <div className={`p-4 rounded-[22px] border shadow-[0_4px_0_#EDEFF6] space-y-2 ${toneStyles}`}>
-                  <div className="flex items-start gap-3">
-                    <Megaphone className="w-5 h-5 text-[#3B4FE0] shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-extrabold">{config.announcement.title}</p>
-                      <p className="text-xs opacity-90 mt-0.5">{config.announcement.message}</p>
+            {/* Simulated Live Announcements */}
+            {simClassAnns.length > 0 && (
+              <div className="space-y-2">
+                {simClassAnns.map((a) => (
+                  <div key={a.id} className={`p-4 rounded-[22px] border shadow-[0_4px_0_#EDEFF6] space-y-2 ${TONE_STYLES[a.tone]}`}>
+                    <div className="flex items-start gap-3">
+                      <Megaphone className="w-5 h-5 text-[#3B4FE0] shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-extrabold">{a.title}</p>
+                        <p className="text-xs opacity-90 mt-0.5">{a.message}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            )}
 
             {/* Simulated Spotlight Lesson */}
             {config?.spotlights[simClass]?.isActive && (

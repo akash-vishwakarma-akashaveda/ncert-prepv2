@@ -10,6 +10,7 @@ import {
   FileText,
   PlayCircle,
   Video as VideoIcon,
+  MessageCircleQuestion,
   Lock,
   Sparkles,
 } from 'lucide-react';
@@ -20,8 +21,10 @@ import { isLessonUnlocked } from '../../services/accessControl';
 import { useDashboardConfig } from '../../hooks/useDashboardConfig';
 import { ChapterNotesContent, useChapterNotes } from '../../components/app/RevisionNotesModal';
 import { AskDoubtForm } from '../../components/player/AskDoubtForm';
+import { COMING_SOON_NOTE, DOUBTS_COMING_SOON } from '../../data/featureFlags';
 import { FeedbackForm } from '../../components/player/FeedbackForm';
 import { LessonPlayer } from '../LessonPlayer';
+import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { EmptyState, btnAccent, btnPrimary, btnSecondary, btnTeal, card, chapterNumbers, formatDuration, lessonPath, subjectPath } from '../ui';
 
 type TabId = 'overview' | 'notes' | 'doubts' | 'feedback';
@@ -48,6 +51,7 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
   };
 
   const video = videoMap.get(videoId);
+  useDocumentTitle(video ? `${video.video_title} — ${video.chapter_name} — NCERT Prep` : 'NCERT Prep');
   const policy = useDashboardConfig().config?.policy;
   const topics = useMemo(
     () =>
@@ -86,7 +90,8 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
     ? isLessonUnlocked(
         video,
         user,
-        currentChapterIndex >= 0 ? currentChapterIndex : undefined,
+        // Per-book position (matches /api/videos/featured): each book's first chapters are free previews.
+        currentChapterIndex >= 0 ? outlineNumbers[currentChapterIndex] - 1 : undefined,
         currentVideoIndexInChapter >= 0 ? currentVideoIndexInChapter : undefined,
         policy
       )
@@ -112,8 +117,8 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
     return (
       <EmptyState
         icon={<VideoIcon className="w-5 h-5" />}
-        title={loading ? 'Loading lesson…' : 'This lesson is not available'}
-        body={loading ? undefined : 'It may have been removed. Pick another lesson from your subjects.'}
+        title={loading ? 'Loading lesson…' : 'This lesson is coming soon'}
+        body={loading ? undefined : "The video for this chapter isn't up yet. The chapter PDF may already be available under Textbooks."}
         action={!loading && <Link to={publicMode ? '/browse' : '/app/subjects'} className={btnPrimary}>Browse lessons</Link>}
       />
     );
@@ -124,7 +129,7 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
   const tabs: { id: TabId; label: string }[] = [
     { id: 'overview', label: 'Overview' },
     { id: 'notes', label: 'Notes & Cheat Sheet' },
-    { id: 'doubts', label: 'Ask a doubt' },
+    { id: 'doubts', label: DOUBTS_COMING_SOON ? 'Doubts (soon)' : 'Ask a doubt' },
     { id: 'feedback', label: 'Feedback' },
   ];
 
@@ -294,7 +299,6 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
                       <FileText className="w-4 h-4 text-[#E0603F]" /> Read this chapter in the NCERT textbook (PDF)
                     </a>
                   )}
-                  <p className="text-xs text-[#6B7280]">Plays without recommendations or comments. Finishing the video marks it complete.</p>
                 </div>
               )}
               {tab === 'notes' && (
@@ -317,7 +321,13 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
               )}
               {tab === 'doubts' && (
                 <div>
-                  {!user ? (
+                  {DOUBTS_COMING_SOON ? (
+                    <div className="p-6 text-center bg-[color:var(--brand-soft)] border-[3px] border-[color:var(--brand-line)] rounded-[22px] space-y-2">
+                      <MessageCircleQuestion className="w-8 h-8 text-[color:var(--brand)] mx-auto" />
+                      <h3 className="text-lg text-[#1E2233]">Coming soon</h3>
+                      <p className="text-xs text-[#6B7280] max-w-sm mx-auto">{COMING_SOON_NOTE}</p>
+                    </div>
+                  ) : !user ? (
                     <div className="p-6 text-center bg-[color:var(--brand-soft)] border-[3px] border-[color:var(--brand-line)] rounded-[22px] space-y-3">
                       <Lock className="w-8 h-8 text-[color:var(--brand)] mx-auto" />
                       <h3 className="text-lg text-[#1E2233]">Ask Educator Doubts</h3>
@@ -390,7 +400,7 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
                     <ul id={panelId} className="pb-2">
                       {chapter.videos.map((v, li) => {
                         const current = v.youtube_id === video.youtube_id;
-                        const isVidUnlocked = isLessonUnlocked(v, user, ci, li, policy);
+                        const isVidUnlocked = isLessonUnlocked(v, user, outlineNumbers[ci] - 1, li, policy);
 
                         return (
                           <li key={v.youtube_id}>

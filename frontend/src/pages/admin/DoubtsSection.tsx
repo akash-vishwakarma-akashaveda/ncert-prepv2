@@ -3,6 +3,7 @@ import { MessageCircleQuestion, RefreshCw, Search, Send, Play } from 'lucide-rea
 import { Doubt, DoubtStatus, Video } from '../../types';
 import { DoubtsService } from '../../services/content';
 import { DoubtStatusBadge } from '../../components/doubts/DoubtStatusBadge';
+import { AdminClassNode } from './adminTree';
 import { Card, EmptyState, Notify, SectionHeader, inputClass, primaryButton, secondaryButton } from './adminUi';
 
 interface DoubtsSectionProps {
@@ -13,6 +14,7 @@ interface DoubtsSectionProps {
   initialDoubtId?: string;
   videos: Video[];
   onSelectVideo: (video: Video) => void;
+  tree: AdminClassNode[];
 }
 
 type Filter = DoubtStatus | 'all';
@@ -25,6 +27,7 @@ export const DoubtsSection: React.FC<DoubtsSectionProps> = ({
   initialDoubtId,
   videos,
   onSelectVideo,
+  tree,
 }) => {
   const [filter, setFilter] = useState<Filter>('open');
   const [classFilter, setClassFilter] = useState('all');
@@ -44,7 +47,6 @@ export const DoubtsSection: React.FC<DoubtsSectionProps> = ({
     [doubts]
   );
 
-  const classes = Array.from(new Set(doubts.map((d) => d.class_sort))).sort();
   const list = doubts
     .filter((d) => filter === 'all' || d.status === filter)
     .filter((d) => classFilter === 'all' || d.class_sort === classFilter)
@@ -125,9 +127,9 @@ export const DoubtsSection: React.FC<DoubtsSectionProps> = ({
         </div>
         <select aria-label="Class" value={classFilter} onChange={(e) => setClassFilter(e.target.value)} className={`${inputClass} w-auto`}>
           <option value="all">All classes</option>
-          {classes.map((c) => (
-            <option key={c} value={c}>
-              Class {parseInt(c, 10)}
+          {tree.map((c) => (
+            <option key={c.class_sort} value={c.class_sort}>
+              {c.name}
             </option>
           ))}
         </select>

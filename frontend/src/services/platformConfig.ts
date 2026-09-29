@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from './firebase';
+import { api } from './api/client';
 
 /**
  * Runtime switches admins can change without a deploy (Admin → Platform settings).
- * Stored in settings/platform (public read, admin write). Cloud Functions read the same doc
- * (functions/src/platform.ts), so limits and kill switches are enforced server-side too.
+ * Stored under settings key "platform" (public read, admin write) — the backend enforces the
+ * same limits server-side too (see prep_ncert/backend/src/routes).
  */
 export interface PlatformConfig {
   features: {
@@ -38,11 +37,10 @@ export const DEFAULT_PLATFORM_CONFIG: PlatformConfig = {
   },
 };
 
-const DOC = 'settings/platform';
-const LOCAL_KEY = 'ncert_prep_platform_config';
+const KEY = 'platform';
 const EVENT = 'ncert_platform_config_updated';
 
-const merge = (raw: Partial<PlatformConfig> | undefined): PlatformConfig => ({
+const merge = (raw: Partial<PlatformConfig> | null | undefined): PlatformConfig => ({
   features: { ...DEFAULT_PLATFORM_CONFIG.features, ...raw?.features },
   limits: { ...DEFAULT_PLATFORM_CONFIG.limits, ...raw?.limits },
   contact: { ...DEFAULT_PLATFORM_CONFIG.contact, ...raw?.contact },
@@ -54,32 +52,17 @@ export const PlatformConfigService = {
   /** One read per session; admin saves broadcast the new value to every open hook. */
   get(): Promise<PlatformConfig> {
     if (!cached) {
-      cached = (async () => {
-        if (isFirebaseConfigured && db) {
-          try {
-            const snap = await getDoc(doc(db, DOC));
-            return merge(snap.data() as Partial<PlatformConfig> | undefined);
-          } catch {
-            return DEFAULT_PLATFORM_CONFIG;
-          }
-        }
-        try {
-          return merge(JSON.parse(localStorage.getItem(LOCAL_KEY) || 'null') || undefined);
-        } catch {
-          return DEFAULT_PLATFORM_CONFIG;
-        }
-      })();
+      cached = api
+        .get<Partial<PlatformConfig> | null>(`/api/settings/${KEY}`)
+        .then(merge)
+        .catch(() => DEFAULT_PLATFORM_CONFIG);
     }
     return cached;
   },
 
   async save(cfg: PlatformConfig): Promise<void> {
     const clean = merge(cfg);
-    if (isFirebaseConfigured && db) {
-      await setDoc(doc(db, DOC), clean);
-    } else {
-      localStorage.setItem(LOCAL_KEY, JSON.stringify(clean));
-    }
+    await api.put(`/api/settings/${KEY}`, clean);
     cached = Promise.resolve(clean);
     window.dispatchEvent(new CustomEvent(EVENT, { detail: clean }));
   },

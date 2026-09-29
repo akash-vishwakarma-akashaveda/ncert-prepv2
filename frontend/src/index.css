@@ -381,28 +381,166 @@ body {
   .animate-marquee, .animate-fly-up, .animate-tilt { animation: none; }
 }
 
-/* Landing hero: sky and confetti on the left (Class 1–5), graph paper through the middle (6–10),
-   faint formulas on the right (11–12). */
+/* Badge-unlock celebration: confetti pieces fly outward from the badge and fade; each piece sets
+   its own --tx/--ty/--rot inline so one keyframe serves every particle. */
+@keyframes confetti-pop {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity: 0; }
+}
+.animate-confetti { animation: confetti-pop 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards; }
+
+@keyframes badge-ring {
+  0% { box-shadow: 0 0 0 0 var(--ring-color, rgba(255, 197, 61, 0.55)); }
+  100% { box-shadow: 0 0 0 22px rgba(255, 197, 61, 0); }
+}
+.animate-badge-ring { animation: badge-ring 1.4s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-confetti, .animate-badge-ring { animation: none; }
+}
+
+/* Landing (playful & bold): an indigo hero sprinkled with confetti dots, sticker shapes on top. */
 .landing-hero {
+  isolation: isolate;
   background:
-    linear-gradient(rgba(59, 79, 224, 0.045) 1px, transparent 1px) 0 0 / 32px 32px,
-    linear-gradient(90deg, rgba(59, 79, 224, 0.045) 1px, transparent 1px) 0 0 / 32px 32px,
-    radial-gradient(40rem 28rem at 0% 0%, #D9EEFF, transparent 70%),
-    radial-gradient(34rem 24rem at 100% 5%, #FFF0C9, transparent 70%),
-    radial-gradient(40rem 26rem at 75% 100%, #ECE6FF, transparent 70%),
-    #F7F8FC;
+    radial-gradient(40rem 26rem at 88% 8%, rgba(139, 108, 240, 0.55), transparent 65%),
+    radial-gradient(34rem 24rem at 4% 96%, rgba(18, 165, 148, 0.45), transparent 65%),
+    #3B4FE0;
 }
-.landing-mix-left,
-.landing-mix-right { position: absolute; inset: 0; pointer-events: none; }
-.landing-mix-left {
-  background: url('/doodles/primary-confetti.svg') 0 0 / 260px repeat;
-  -webkit-mask-image: linear-gradient(90deg, black, transparent 42%);
-  mask-image: linear-gradient(90deg, black, transparent 42%);
+.landing-hero::before,
+.landing-confetti::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, rgba(255, 197, 61, 0.55) 2.5px, transparent 3px),
+    radial-gradient(circle, rgba(255, 255, 255, 0.28) 2px, transparent 2.5px),
+    radial-gradient(circle, rgba(255, 158, 181, 0.45) 2.5px, transparent 3px);
+  background-size: 140px 120px, 90px 90px, 170px 150px;
+  background-position: 10px 20px, 50px 60px, 100px 10px;
 }
-.landing-mix-right {
-  background: url('/doodles/senior.svg') 0 0 / 420px repeat;
-  -webkit-mask-image: linear-gradient(270deg, black, transparent 40%);
-  mask-image: linear-gradient(270deg, black, transparent 40%);
+.landing-confetti { isolation: isolate; }
+
+/* Faint dot paper behind the bento. */
+.landing-dots {
+  background-image: radial-gradient(rgba(30, 34, 51, 0.09) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+/* Landing feature tiles: chunky border + ledge, lift and straighten slightly on hover. */
+.fun-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.5rem;
+  border-width: 3px;
+  border-radius: 30px;
+  box-shadow: 0 7px 0 var(--edge);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.3s;
+}
+.fun-tile:hover { transform: translateY(-4px) rotate(-0.6deg); box-shadow: 0 11px 0 var(--edge); }
+.fun-tile-icon {
+  width: 3rem;
+  height: 3rem;
+  padding: 0.7rem;
+  border-radius: 16px;
+  transform: rotate(-8deg);
+  transition: transform 0.3s;
+}
+.fun-tile:hover .fun-tile-icon { transform: rotate(6deg) scale(1.08); }
+
+/* Landing class cards: flat pastel card, big roman numeral, playful hover. */
+.class-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  border-radius: 26px;
+  border: 2px solid var(--line);
+  background: var(--bg);
+  cursor: pointer;
+  transition: transform 0.35s cubic-bezier(0.3, 1.5, 0.5, 1), box-shadow 0.35s ease, border-color 0.2s;
+}
+.class-card:hover,
+.class-card:focus-visible {
+  transform: translateY(-8px) rotate(var(--tilt));
+  border-color: var(--ink);
+  box-shadow: 0 18px 30px -14px color-mix(in srgb, var(--ink) 55%, transparent);
+  outline: none;
+}
+.class-card:focus-visible { box-shadow: 0 0 0 4px #FFC53D; }
+.class-card-roman {
+  position: relative;
+  font-size: clamp(30px, 7vw, 44px);
+  line-height: 1;
+  color: var(--ink);
+  transition: transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1), letter-spacing 0.35s;
+}
+.class-card:hover .class-card-roman { transform: scale(1.14); letter-spacing: 0.04em; }
+/* Soft circle in the corner that swells to fill behind the numeral. */
+.class-card-blob {
+  position: absolute;
+  z-index: -1;
+  width: 70%;
+  aspect-ratio: 1;
+  right: -28%;
+  top: -28%;
+  border-radius: 9999px;
+  background: var(--line);
+  opacity: 0.55;
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s;
+}
+.class-card:hover .class-card-blob { transform: translate(-38%, 38%) scale(1.6); opacity: 0.45; }
+/* Compact variant for the explorer's class row, and the picked state. */
+.class-card-sm { border-radius: 20px; }
+.class-card-sm .class-card-roman { font-size: 26px; }
+.class-card[aria-pressed='true'] {
+  background: #FFC53D;
+  border-color: #E0A81F;
+  box-shadow: 0 5px 0 #E0A81F;
+  transform: translateY(-3px);
+}
+.class-card[aria-pressed='true'] .class-card-roman { color: #1E2233; }
+.class-card[aria-pressed='true'] .class-card-blob { background: #FFE39A; }
+/* Diagonal light sheen that sweeps across once per hover. */
+.class-card-sheen {
+  position: absolute;
+  inset: -40% auto -40% -60%;
+  width: 45%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  transform: skewX(-18deg) translateX(0);
+  pointer-events: none;
+}
+.class-card:hover .class-card-sheen { transform: skewX(-18deg) translateX(420%); transition: transform 0.7s ease; }
+
+
+/* Frosted panel used by the hero's cards, so they sit on the aurora instead of blocking it out. */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.72);
+  /* Standard property only: the build adds the -webkit- prefix per browser targets. Writing both
+     makes it drop the unprefixed one, which costs Firefox the frosted effect entirely. */
+  backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 1px 2px rgba(30, 34, 51, 0.04), 0 12px 28px -14px rgba(30, 34, 51, 0.22);
+}
+
+/* Both prefixes: without -webkit- the subject strip ends in a hard cut, not a fade. */
+.marquee-fade {
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, black 6%, black 94%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fun-tile, .fun-tile-icon, .class-card, .class-card-roman, .class-card-blob, .class-card-sheen { transition: none; }
 }
 
 /* Scroll reveal. Content only starts hidden once JS marks the page ready, so it never disappears without JS. */

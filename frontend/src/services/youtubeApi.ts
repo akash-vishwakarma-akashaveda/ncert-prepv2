@@ -1,3 +1,6 @@
+/** YouTube's own thumbnail CDN — no API key needed. mqdefault always exists; hqdefault can 404 for some uploads. */
+export const youtubeThumbnail = (youtubeId: string) => `https://i.ytimg.com/vi/${youtubeId}/mqdefault.jpg`;
+
 export interface YTPlayer {
   destroy: () => void;
   getVideoData?: () => { title?: string; video_id?: string };
@@ -34,6 +37,8 @@ declare global {
 }
 
 export const YT_STATE_ENDED = 0;
+export const YT_STATE_PLAYING = 1;
+export const YT_STATE_PAUSED = 2;
 
 // 2 invalid id, 5 HTML5 error, 100 removed/private, 101/150 embedding disabled, 153 missing referrer.
 export const YT_UNAVAILABLE_ERROR_CODES = [2, 5, 100, 101, 150, 153];

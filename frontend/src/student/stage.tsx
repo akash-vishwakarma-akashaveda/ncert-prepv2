@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, BookOpen, MessageCircleQuestion, Bookmark, Timer, Bell, UserRound, Trophy } from 'lucide-react';
+import { Home, BookOpen, MessageCircleQuestion, Bookmark, Timer, Bell, UserRound, Trophy, FileText } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { EducationalStage, getGradeStage } from '../data/stageThemes';
 
@@ -9,7 +9,7 @@ export function useStage(): EducationalStage | null {
   return !isAdmin && user?.grade_preference ? getGradeStage(user.grade_preference) : null;
 }
 
-export type Section = 'home' | 'subjects' | 'doubts' | 'saved' | 'focus' | 'reminders' | 'profile' | 'leaderboard';
+export type Section = 'home' | 'subjects' | 'doubts' | 'saved' | 'focus' | 'reminders' | 'profile' | 'leaderboard' | 'textbooks';
 
 // Each student section has its own colour, used for nav and page-header icons in the Class 1–10 themes.
 export const SECTIONS: Record<Section, { Icon: React.ElementType; ink: string; soft: string }> = {
@@ -21,6 +21,7 @@ export const SECTIONS: Record<Section, { Icon: React.ElementType; ink: string; s
   reminders: { Icon: Bell, ink: '#B87A06', soft: '#FFF0CF' },
   profile: { Icon: UserRound, ink: '#7652DB', soft: '#ECE7FE' },
   leaderboard: { Icon: Trophy, ink: '#E0A81F', soft: '#FFF5D6' },
+  textbooks: { Icon: FileText, ink: '#C24A2C', soft: '#FFE9E2' },
 };
 
 export const tintVars = (s: Section) =>

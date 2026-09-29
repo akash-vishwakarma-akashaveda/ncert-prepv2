@@ -3,11 +3,12 @@ import react from '@vitejs/plugin-react';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Without Firebase keys the app silently runs in demo mode (local data, sample classmates).
-  // That must never reach production, so a production build without keys fails unless demo is explicit.
+  // Every request goes to the backend at VITE_API_URL — a production build without it would
+  // silently point at localhost:4000 (see services/api/client.ts's fallback), which fails loudly
+  // enough in the browser console, but this fails at build time instead so it's caught sooner.
   const env = loadEnv(mode, process.cwd(), '');
-  if (mode === 'production' && !env.VITE_FIREBASE_API_KEY && env.VITE_ALLOW_DEMO_BUILD !== 'true') {
-    throw new Error('VITE_FIREBASE_API_KEY is not set. Add the Firebase keys, or set VITE_ALLOW_DEMO_BUILD=true for a demo build.');
+  if (mode === 'production' && !env.VITE_API_URL) {
+    throw new Error('VITE_API_URL is not set. Point it at the backend, e.g. https://your-domain.com (no /api suffix).');
   }
   return {
   plugins: [react()],
@@ -21,14 +22,6 @@ export default defineConfig(({ mode }) => {
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom'],
-          'vendor-firebase': [
-            'firebase/app',
-            'firebase/auth',
-            'firebase/firestore',
-            'firebase/functions',
-            'firebase/storage',
-            'firebase/app-check',
-          ],
           'vendor-utils': ['fuse.js', 'clsx', 'tailwind-merge'],
           'vendor-icons': ['lucide-react'],
         },

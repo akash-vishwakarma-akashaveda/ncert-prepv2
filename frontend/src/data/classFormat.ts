@@ -1,6 +1,6 @@
 import { Video } from '../types';
 
-// Firestore stores the Google Sheet format (SRS 4.1): class_display "Class IX", class_sort "Class 9".
+// The database stores the Google Sheet format (SRS 4.1): class_display "Class IX", class_sort "Class 9".
 // Inside the app a class is always the zero-padded numeral "09" and is displayed as "Class 9".
 
 const ROMAN: [number, string][] = [

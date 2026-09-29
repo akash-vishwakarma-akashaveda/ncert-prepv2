@@ -1,10 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { Plus, Search, Eye, Edit2, Trash2, CheckCircle2, AlertTriangle, Play, PlaySquare } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { Plus, Search, Eye, Edit2, Trash2, Play, PlaySquare, Upload } from 'lucide-react';
 import { Video } from '../../types';
 import { VideoService } from '../../services/videos';
-import { isFirebaseConfigured } from '../../services/firebase';
 import { AdminClassNode } from './adminTree';
-import { Card, EmptyState, Modal, Notify, SectionHeader, inputClass, primaryButton, secondaryButton } from './adminUi';
+import { Card, EmptyState, Modal, Notify, SectionHeader, Toggle, inputClass, primaryButton, secondaryButton, useConfirm } from './adminUi';
 
 interface VideosSectionProps {
   videos: Video[];
@@ -30,9 +29,10 @@ const EMPTY_FORM: Partial<Video> = {
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
-// Live mode: the Google Sheet owns lesson content (class, subject, book, chapter, title, publish state)
-// and every sync overwrites it. Admin owns visibility and the PYQ flag only. Demo mode edits everything.
-const SHEET_MANAGED = isFirebaseConfigured;
+// The Google Sheet / Excel upload owns lesson content (class, subject, book, chapter, title,
+// publish state) and every sync overwrites it. Admin owns visibility and the PYQ flag only —
+// videos are never hand-authored here.
+const SHEET_MANAGED = true;
 
 export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRefreshCatalog, notify, onSelectVideo }) => {
   const [queryText, setQueryText] = useState('');
@@ -43,6 +43,32 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
   const [editingId, setEditingId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Video | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingExcel, setUploadingExcel] = useState(false);
+  const excelInputRef = useRef<HTMLInputElement>(null);
+  const [page, setPage] = useState(1);
+  const { confirm, confirmNode } = useConfirm();
+  const PAGE_SIZE = 50;
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file next time
+    if (!file) return;
+    setUploadingExcel(true);
+    try {
+      const result = await VideoService.syncFromExcel(file);
+      await onRefreshCatalog();
+      const summary = `${result.created} new, ${result.updated} updated, ${result.skipped} unchanged`;
+      if (result.errors.length > 0) {
+        notify(`Synced with ${result.errors.length} row error(s): ${summary}. First: ${result.errors[0]}`, 'error');
+      } else {
+        notify(`Synced from Excel: ${summary}.`);
+      }
+    } catch (err) {
+      notify((err as Error).message || 'Failed to sync from Excel.', 'error');
+    } finally {
+      setUploadingExcel(false);
+    }
+  };
 
   const subjects = useMemo(() => Array.from(new Set(videos.map((v) => v.subject))).sort(), [videos]);
 
@@ -56,6 +82,15 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
     if (!q) return true;
     return [v.video_title, v.chapter_name, v.subject, v.textbook || '', v.youtube_id].some((f) => f.toLowerCase().includes(q));
   });
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Any filter/search change invalidates the current page — back to page 1 so results aren't hidden.
+  React.useEffect(() => {
+    setPage(1);
+  }, [queryText, filterClass, filterSubject, filterStatus]);
 
   const formClass = tree.find((c) => c.class_sort === form?.class_sort);
   const formSubject = formClass?.subjects.find((s) => s.name === form?.subject);
@@ -128,7 +163,7 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
   };
 
   const remove = async (video: Video) => {
-    if (!window.confirm(`Delete "${video.video_title}"? Students' history keeps a "No longer available" entry.`)) return;
+    if (!(await confirm(`Delete "${video.video_title}"? Students' history keeps a "No longer available" entry.`))) return;
     try {
       await VideoService.deleteVideo(video.youtube_id);
       await onRefreshCatalog();
@@ -148,15 +183,33 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
             : "Demo mode: lessons are edited here. Hiding a video keeps it in students' history as “No longer available”."
         }
         actions={
-          !SHEET_MANAGED && <button
-            onClick={() => {
-              setEditingId(null);
-              setForm({ ...EMPTY_FORM, class_sort: filterClass !== 'all' ? filterClass : '10' });
-            }}
-            className={primaryButton}
-          >
-            <Plus className="w-4 h-4" /> Add video
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={excelInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleExcelUpload}
+              className="hidden"
+            />
+            <button
+              onClick={() => excelInputRef.current?.click()}
+              disabled={uploadingExcel}
+              className={secondaryButton}
+            >
+              <Upload className="w-4 h-4" /> {uploadingExcel ? 'Syncing…' : 'Upload Excel'}
+            </button>
+            {!SHEET_MANAGED && (
+              <button
+                onClick={() => {
+                  setEditingId(null);
+                  setForm({ ...EMPTY_FORM, class_sort: filterClass !== 'all' ? filterClass : '10' });
+                }}
+                className={primaryButton}
+              >
+                <Plus className="w-4 h-4" /> Add video
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -216,7 +269,7 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#E3E5EC]">
-                {filtered.map((v) => (
+                {paged.map((v) => (
                   <tr key={v.youtube_id} className={v.isActive ? '' : 'bg-[#FFF6E2]/40'}>
                     <td className="py-3 px-4 whitespace-nowrap">
                       <div className="font-extrabold">{v.class_display}</div>
@@ -231,16 +284,10 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap font-mono text-[11px]">{v.youtube_id}</td>
                     <td className="py-3 px-4 whitespace-nowrap">
-                      <button
-                        onClick={() => toggleActive(v)}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold cursor-pointer ${
-                          v.isActive ? 'bg-[#E7F7F1] text-[#0B7A67]' : 'bg-[#FFDCD0] text-[#8A2E17]'
-                        }`}
-                        title="Toggle visibility"
-                      >
-                        {v.isActive ? <CheckCircle2 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                        {v.isActive ? 'Visible' : 'Hidden'}
-                      </button>
+                      <label className="inline-flex items-center gap-2 text-[11px] font-extrabold align-middle">
+                        <Toggle checked={v.isActive} onChange={() => toggleActive(v)} label={`Visible to students: ${v.video_title}`} />
+                        <span className={v.isActive ? 'text-[#0B7A67]' : 'text-[#8A2E17]'}>{v.isActive ? 'Visible' : 'Hidden'}</span>
+                      </label>
                       {v.yt_public === false && (
                         <span className="ml-1.5 inline-flex px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-[#F1F3FB] text-[#6B7280]" title="Sheet says the YouTube upload is not public yet. Students can't see it until the sheet shows PUBLISH_OK.">
                           Not public yet
@@ -256,7 +303,8 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
                           setEditingId(v.youtube_id);
                           setForm(v);
                         }}
-                        aria-label="Edit"
+                        aria-label={SHEET_MANAGED ? 'Video settings' : 'Edit'}
+                        title={SHEET_MANAGED ? 'Visibility & PYQs (details come from the Google Sheet)' : 'Edit'}
                         className="p-1.5 text-slate-600 hover:text-[#12A594] rounded-xl cursor-pointer"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -271,15 +319,43 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
             </table>
           </div>
         )}
-        <p className="text-xs text-[#6B7280]">
-          Showing {filtered.length} of {videos.length} videos
-        </p>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <p className="text-xs text-[#6B7280]">
+            Showing {paged.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{(currentPage - 1) * PAGE_SIZE + paged.length} of{' '}
+            {filtered.length} filtered ({videos.length} total)
+          </p>
+          {pageCount > 1 && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className={`${secondaryButton} px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                Prev
+              </button>
+              <span className="text-xs font-extrabold text-[#6B7280]">
+                Page {currentPage} of {pageCount}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                disabled={currentPage >= pageCount}
+                className={`${secondaryButton} px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed`}
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </div>
       </Card>
 
       {form && (
         <Modal
-          title={editingId ? 'Edit video' : 'Add video'}
-          subtitle={SHEET_MANAGED ? 'Content comes from the Google Sheet. Change it there and sync; visibility and PYQs are set here.' : undefined}
+          title={SHEET_MANAGED ? 'Video settings' : editingId ? 'Edit video' : 'Add video'}
+          subtitle={
+            SHEET_MANAGED
+              ? 'The greyed-out details are read-only here: the Google Sheet owns them and every sync would overwrite a change made here. Edit them in the sheet, then run the sync (or Upload Excel). Visibility and PYQs below are yours to change.'
+              : undefined
+          }
           onClose={() => setForm(null)}
         >
           <form onSubmit={save} className="space-y-4">
@@ -365,12 +441,12 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
               </a>
             )}
             <div className="flex flex-wrap items-center gap-5 pt-2 border-t border-[#E3E5EC]">
-              <label className="flex items-center gap-2 text-xs font-extrabold cursor-pointer">
-                <input type="checkbox" checked={Boolean(form.isActive)} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+              <label className="flex items-center gap-2 text-xs font-extrabold">
+                <Toggle checked={Boolean(form.isActive)} onChange={(v) => setForm({ ...form, isActive: v })} label="Visible to students" />
                 Visible to students
               </label>
-              <label className="flex items-center gap-2 text-xs font-extrabold cursor-pointer">
-                <input type="checkbox" checked={Boolean(form.pyq_available)} onChange={(e) => setForm({ ...form, pyq_available: e.target.checked })} />
+              <label className="flex items-center gap-2 text-xs font-extrabold">
+                <Toggle checked={Boolean(form.pyq_available)} onChange={(v) => setForm({ ...form, pyq_available: v })} label="Includes PYQs" />
                 Includes PYQs
               </label>
             </div>
@@ -413,6 +489,7 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
           </div>
         </Modal>
       )}
+      {confirmNode}
     </div>
   );
 };

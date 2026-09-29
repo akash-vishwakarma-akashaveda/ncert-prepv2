@@ -1,0 +1,21 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.25.1
+# ignores vulnerabilities until expiry date; change duration by modifying expiry date
+ignore:
+  SNYK-JS-XLSX-5457926:
+    - '*':
+        reason: >-
+          False positive: xlsx 0.20.3 is installed from cdn.sheetjs.com (see
+          package.json). CVE-2023-30533 was fixed in 0.19.3 and CVE-2024-22363
+          in 0.20.2; Snyk only knows the npm registry, which stops at 0.18.5.
+        expires: 2027-09-28T00:00:00.000Z
+        created: 2026-09-28T15:01:49.056Z
+  SNYK-JS-XLSX-6252523:
+    - '*':
+        reason: >-
+          False positive: xlsx 0.20.3 is installed from cdn.sheetjs.com (see
+          package.json). CVE-2023-30533 was fixed in 0.19.3 and CVE-2024-22363
+          in 0.20.2; Snyk only knows the npm registry, which stops at 0.18.5.
+        expires: 2027-09-28T00:00:00.000Z
+        created: 2026-09-28T15:02:01.057Z
+patch: {}

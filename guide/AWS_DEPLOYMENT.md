@@ -94,7 +94,7 @@ Build locally or on the instance — building on the instance keeps secrets off 
 ```bash
 cd /var/www/prep-ncert/prep_ncert/frontend
 npm ci
-cp .env.example .env   # then fill in VITE_API_URL=https://your-domain.com/api, VITE_GOOGLE_CLIENT_ID, and the Firebase keys still needed for content/leaderboard until their migration phase
+cp .env.example .env   # then fill in VITE_API_URL=https://your-domain.com (no /api suffix — every call path already includes it), VITE_GOOGLE_CLIENT_ID, and the real Firebase keys still needed for content/leaderboard until their migration phase
 npm run build
 ```
 

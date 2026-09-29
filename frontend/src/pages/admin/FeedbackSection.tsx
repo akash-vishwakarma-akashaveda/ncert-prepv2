@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MessageSquare, RefreshCw } from 'lucide-react';
 import { Feedback } from '../../types';
-import { FirestoreService } from '../../services/firestore';
+import { FeedbackService } from '../../services/feedback';
 import { Card, EmptyState, Notify, SectionHeader, secondaryButton } from './adminUi';
 
 interface FeedbackSectionProps {
@@ -18,7 +18,7 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({ feedbacks, rel
   const toggle = async (fb: Feedback) => {
     const next = fb.status === 'reviewed' ? 'new' : 'reviewed';
     try {
-      await FirestoreService.updateFeedbackStatus(fb.feedbackId || '', next);
+      await FeedbackService.updateStatus(fb.feedbackId || '', next);
       await reloadFeedback();
       notify(`Marked as ${next}.`);
     } catch {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom';
 import {
   Home,
@@ -9,6 +9,7 @@ import {
   Bell,
   UserRound,
   Shield,
+  User,
   LogOut,
   Menu,
   X,
@@ -24,22 +25,29 @@ import {
   Database,
   Eye,
   Trophy,
+  Gift,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useDoubts } from '../context/DoubtsContext';
+import { useProgress } from '../context/ProgressContext';
 import { useCatalogContext } from '../context/CatalogContext';
+import { useAppToast } from '../context/ToastContext';
 import { DoubtsService } from '../services/content';
-import { FirestoreService } from '../services/firestore';
+import { FeedbackService } from '../services/feedback';
+import { getSocket } from '../services/socket';
+import { Doubt } from '../types';
 import { SearchResultsModal } from '../components/search/SearchResultsModal';
 import { OnboardingWizard } from '../components/onboarding/OnboardingWizard';
 import { ConsentGate } from '../components/consent/ConsentGate';
 import { NotificationCard } from '../components/notifications/NotificationCard';
+import { BadgeUnlockModal } from '../components/badges/BadgeUnlockModal';
 import { classLabel, currentStreak, xpStats } from '../data/gamification';
 import { Mascot, Section, tintVars, useStage } from './stage';
+import { useBadgeUnlocks } from './useBadgeUnlocks';
 import { LogoMark } from '../components/common/Logo';
 import { FocusTimer, useFocusTimer } from './useFocusTimer';
 import { FloatingPomodoroWidget } from '../components/pomodoro/FloatingPomodoroWidget';
-import { ProgressBar, lessonPath, pill } from './ui';
+import { ProgressBar, card, lessonPath, pill } from './ui';
 import { useCourse } from './useCourse';
 import { UserAvatar } from '../data/avatars';
 
@@ -64,7 +72,9 @@ interface NavItem {
 
 export const StudentLayout: React.FC = () => {
   const { user, isAdmin, loading, signOut } = useAuth();
-  const { unreadCount } = useDoubts();
+  const { unreadCount, myDoubts } = useDoubts();
+  const { favoriteIds } = useProgress();
+  const { pushToast } = useAppToast();
   const { activeVideos, classes } = useCatalogContext();
   const navigate = useNavigate();
   const location = useLocation();
@@ -72,6 +82,15 @@ export const StudentLayout: React.FC = () => {
   const timer = useFocusTimer();
   const { completedCount } = useCourse();
   const stage = useStage();
+  const { level, xp, xpInLevel } = xpStats(completedCount);
+  const streak = currentStreak(user);
+  const { current: unlockedBadge, dismiss: dismissBadge } = useBadgeUnlocks(user?.userId, {
+    completedCount,
+    streak,
+    doubtsAsked: myDoubts.length,
+    level,
+    favorites: favoriteIds.length,
+  });
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -87,6 +106,8 @@ export const StudentLayout: React.FC = () => {
   const [adminOpenDoubts, setAdminOpenDoubts] = useState(0);
   const [adminFeedbackCount, setAdminFeedbackCount] = useState(0);
   const [notificationOpen, setNotificationOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const isUserAdmin = isAdmin;
 
@@ -108,7 +129,7 @@ export const StudentLayout: React.FC = () => {
         // ignore
       }
       try {
-        const feedback = await FirestoreService.getFeedbackList();
+        const feedback = await FeedbackService.listAll();
         if (active) {
           setAdminFeedbackCount(feedback.filter((f) => f.status !== 'reviewed').length);
         }
@@ -120,18 +141,52 @@ export const StudentLayout: React.FC = () => {
     const onLocal = () => loadCounts();
     window.addEventListener('quickprep-local-change', onLocal);
     window.addEventListener('storage', onLocal);
+    // Live badge counts: any doubt or feedback change anywhere re-reads them.
+    const socket = getSocket();
+    const liveEvents = ['doubt:new', 'doubt:updated', 'feedback:changed'];
+    liveEvents.forEach((e) => socket.on(e, onLocal));
     return () => {
       active = false;
       window.removeEventListener('quickprep-local-change', onLocal);
       window.removeEventListener('storage', onLocal);
+      liveEvents.forEach((e) => socket.off(e, onLocal));
     };
   }, [isUserAdmin]);
 
+  // Live "new doubt" toast for admins (the badge count is refreshed by the effect above).
+  // DoubtsProvider owns the socket's connect/disconnect lifecycle for any signed-in user
+  // (admins included); this only attaches a listener to that already-managed connection.
   useEffect(() => {
-    if (!user || isUserAdmin || user.consent?.status !== 'granted') return; // onboarding only after consent
+    if (!isUserAdmin) return;
+    const socket = getSocket();
+    const onNewDoubt = (doubt: Doubt) => {
+      pushToast({
+        title: 'New student doubt',
+        message: `${doubt.userName || 'A student'} asked: "${doubt.question.slice(0, 90)}${doubt.question.length > 90 ? '…' : ''}"`,
+        icon: MessageCircleQuestion,
+        iconBg: 'bg-[#FFF0CF]',
+        iconColor: 'text-[#B87A06]',
+        actionUrl: `/app?tab=doubts`,
+      });
+    };
+    socket.on('doubt:new', onNewDoubt);
+    return () => {
+      socket.off('doubt:new', onNewDoubt);
+    };
+  }, [isUserAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // No dependency array on purpose: ConsentGate only renders this component's children (where the
+  // wizard modal lives) once BOTH email verification and consent land, but those can settle at
+  // different times and this effect can't watch every field that might gate that. Checking after
+  // every render instead of a specific dependency list means it can never miss the moment this
+  // becomes reachable; the ref makes it a one-shot decision per mount so it doesn't nag on revisits.
+  const onboardingCheckedRef = useRef(false);
+  useEffect(() => {
+    if (!user || isUserAdmin || user.consent?.status !== 'granted' || onboardingCheckedRef.current) return;
+    onboardingCheckedRef.current = true;
     const done = localStorage.getItem(`ncert_prep_onboarded_${user.userId}`) === 'true' || user.onboarding_completed;
     if (!done || !user.grade_preference) setOnboardingOpen(true);
-  }, [user?.userId, user?.grade_preference, user?.onboarding_completed, user?.consent?.status, isUserAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -144,11 +199,6 @@ export const StudentLayout: React.FC = () => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-
-  if (loading && !user) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-[#6B7280]">Loading…</div>;
-  }
-  if (!user) return <Navigate to="/" replace />;
 
   const toggleCollapsed = () =>
     setCollapsed((c) => {
@@ -165,6 +215,32 @@ export const StudentLayout: React.FC = () => {
     navigate('/', { replace: true });
   };
 
+  // Close the avatar menu on an outside click or Escape. The ref wraps the button and the menu
+  // together, so clicking the button itself is not treated as "outside" and does not fight the toggle.
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node)) setProfileMenuOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setProfileMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [profileMenuOpen]);
+
+  // Early returns only after every hook above: returning before one of them changed the hook count
+  // between renders (loading -> signed in on refresh, signed in -> null on logout / log out of all
+  // devices), which React treats as a crash and the ErrorBoundary showed "Something went wrong".
+  if (loading && !user) {
+    return <div className="min-h-screen flex items-center justify-center text-sm text-[#6B7280]">Loading…</div>;
+  }
+  if (!user) return <Navigate to="/" replace />;
+
   const classVideos = user.grade_preference && !isUserAdmin
     ? activeVideos.filter((v) => v.class_sort === user.grade_preference)
     : activeVideos;
@@ -178,6 +254,7 @@ export const StudentLayout: React.FC = () => {
     { to: '/app?tab=doubts', label: 'Student Doubts', icon: MessageCircleQuestion, badge: adminOpenDoubts },
     { to: '/app?tab=feedback', label: 'Student Feedback', icon: MessageSquare, badge: adminFeedbackCount },
     { to: '/app?tab=data', label: 'Data & Sync', icon: Database },
+    { to: '/app?tab=insights', label: 'Referrals & Watch Hours', icon: Gift },
   ];
 
   const adminAccountNav: NavItem[] = [
@@ -188,6 +265,7 @@ export const StudentLayout: React.FC = () => {
   const studentNav: NavItem[] = [
     { to: '/app', label: 'Home', icon: Home, end: true, section: 'home' },
     { to: '/app/subjects', label: 'My subjects', icon: BookOpen, section: 'subjects' },
+    { to: '/app/textbooks', label: 'Textbooks', icon: FileText, section: 'textbooks' },
     { to: '/app/leaderboard', label: 'Leaderboard', icon: Trophy, section: 'leaderboard' },
     { to: '/app/doubts', label: 'Doubts', icon: MessageCircleQuestion, badge: unreadCount, section: 'doubts' },
     { to: '/app/saved', label: 'Saved', icon: Bookmark, section: 'saved' },
@@ -224,8 +302,6 @@ export const StudentLayout: React.FC = () => {
     return location.pathname === item.to || location.pathname.startsWith(item.to + '/');
   };
 
-  const { level, xp, xpInLevel } = xpStats(completedCount);
-  const streak = currentStreak(user);
   const goalMinutes = user.study_goal_minutes || 50;
   const focusMinutes = timer.minutesToday;
   const bellCount = isUserAdmin ? adminOpenDoubts : unreadCount;
@@ -237,7 +313,8 @@ export const StudentLayout: React.FC = () => {
         (dark ? (
           <span className="flex flex-col leading-tight">
             <span className="font-display text-[15px] text-white">Admin</span>
-            <span className="text-[10px] font-bold text-[#8A90A8]">Console</span>
+            {/* Read from auth state, so a rename on the profile page shows here immediately. */}
+            <span className="text-[10px] font-bold text-[#8A90A8] truncate max-w-[150px]">{user.displayName || 'Console'}</span>
           </span>
         ) : (
           <span className="font-display text-[19px] whitespace-nowrap">
@@ -468,24 +545,60 @@ export const StudentLayout: React.FC = () => {
                 adminFeedbackCount={adminFeedbackCount}
               />
             </div>
-            <NavLink
-              to="/app/profile"
-              aria-label="Profile"
-              className="relative shrink-0 hover:opacity-90 transition-opacity"
-            >
-              {isUserAdmin ? (
-                <div className="w-10 h-10 rounded-[14px] bg-[#1E2233] text-white font-display text-[15px] flex items-center justify-center">
-                  <Shield className="w-4 h-4 text-[#A9E6D3]" />
+            <div ref={profileMenuRef} className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((prev) => !prev)}
+                aria-label="Your account"
+                aria-expanded={profileMenuOpen}
+                aria-haspopup="menu"
+                className="block rounded-[14px] hover:opacity-90 transition-opacity cursor-pointer"
+              >
+                {isUserAdmin ? (
+                  <div className="w-10 h-10 rounded-[14px] bg-[#1E2233] text-white font-display text-[15px] flex items-center justify-center">
+                    <Shield className="w-4 h-4 text-[#A9E6D3]" />
+                  </div>
+                ) : (
+                  <UserAvatar
+                    photoURL={user.photoURL}
+                    displayName={user.displayName}
+                    size="md"
+                    className={`ring-2 ${profileMenuOpen ? 'ring-[color:var(--brand)]' : 'ring-[color:var(--card-line)]'}`}
+                  />
+                )}
+              </button>
+
+              {profileMenuOpen && (
+                <div
+                  role="menu"
+                  className={`${card} absolute right-0 top-[calc(100%+10px)] z-50 w-56 p-1.5 animate-pop-soft`}
+                >
+                  <div className="px-3 py-2 border-b-2 border-[color:var(--card-line)] mb-1.5">
+                    <p className="text-[13px] font-extrabold text-[#1E2233] truncate">{user.displayName || (isUserAdmin ? 'Educator' : 'Student')}</p>
+                    <p className="text-[11px] font-semibold text-[#6B7280] truncate">{user.email}</p>
+                  </div>
+                  <NavLink
+                    to="/app/profile"
+                    role="menuitem"
+                    onClick={() => setProfileMenuOpen(false)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-2xl text-[13px] font-extrabold text-[#4B5168] hover:bg-[#F1F3FB]"
+                  >
+                    <User className="w-[17px] h-[17px]" /> View profile
+                  </NavLink>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setProfileMenuOpen(false);
+                      void handleLogout();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-2xl text-[13px] font-extrabold text-[#C24A2C] hover:bg-[#FFE9E2] cursor-pointer"
+                  >
+                    <LogOut className="w-[17px] h-[17px]" /> Sign out
+                  </button>
                 </div>
-              ) : (
-                <UserAvatar
-                  photoURL={user.photoURL}
-                  displayName={user.displayName}
-                  size="md"
-                  className="ring-2 ring-[color:var(--card-line)]"
-                />
               )}
-            </NavLink>
+            </div>
           </div>
         </header>
 
@@ -538,6 +651,9 @@ export const StudentLayout: React.FC = () => {
         classes={classes}
       />
       {!isUserAdmin && <FloatingPomodoroWidget timer={timer} />}
+      {!isUserAdmin && stage && unlockedBadge && (
+        <BadgeUnlockModal badge={unlockedBadge} classSort={user.grade_preference || '10'} stage={stage} onClose={dismissBadge} />
+      )}
     </div>
     </ConsentGate>
   );

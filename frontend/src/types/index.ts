@@ -27,6 +27,7 @@ export interface User {
   photoURL?: string | null;
   phoneNumber?: string | null;
   role?: 'student' | 'admin';
+  referral_code?: string | null;
   grade_preference?: string;
   study_goal_minutes?: number;
   streak_days?: number;
@@ -38,6 +39,8 @@ export interface User {
   last_watched_video: string | null;
   onboarding_completed?: boolean;
   focus_subjects?: string[];
+  /** Classes 11-12 only: 'science' | 'commerce' | 'humanities'. Null until the student picks one. */
+  stream?: string | null;
   xp?: number;
   level?: number;
   created_at?: string | number;

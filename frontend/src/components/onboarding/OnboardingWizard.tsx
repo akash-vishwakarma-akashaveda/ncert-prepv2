@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ClassGroup } from '../../types';
 import { ArrowRight, ArrowLeft, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { STREAMS, StreamId, classHasStreams, getStream, isInStream } from '../../data/streams';
 import { ClassTile } from '../home/ClassGrid';
 import { REMINDER_HOURS, formatHour, reminderHour, reminderSummary } from '../profile/ReminderSettingsCard';
 
@@ -24,6 +25,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const [selectedGrade, setSelectedGrade] = useState<string>('');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [selectedStream, setSelectedStream] = useState<string>('');
   const [dailyGoal, setDailyGoal] = useState<number>(25);
   const [enableReminders, setEnableReminders] = useState<boolean>(false);
   const [reminderFreq, setReminderFreq] = useState<'daily' | 'weekly'>('weekly');
@@ -36,6 +38,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setStep(1);
     setSelectedGrade(user?.grade_preference || '');
     setSelectedSubjects(user?.focus_subjects || []);
+    setSelectedStream(user?.stream || '');
     setDailyGoal(user?.study_goal_minutes || 25);
     setEnableReminders(Boolean(user?.reminders_enabled));
     setReminderFreq(user?.reminder_frequency || 'weekly');
@@ -61,6 +64,14 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     onClose();
   };
 
+  // Picking a stream fills in its subjects, so a senior does not have to tick nine chips by hand.
+  // They stay editable below, and subjects outside the stream remain open from My subjects.
+  const pickStream = (id: StreamId) => {
+    setSelectedStream(id);
+    const stream = getStream(id);
+    setSelectedSubjects(availableSubjects.filter((subject) => isInStream(subject, stream)));
+  };
+
   const toggleSubject = (subject: string) => {
     setSelectedSubjects((prev) =>
       prev.includes(subject) ? prev.filter((s) => s !== subject) : [...prev, subject]
@@ -75,6 +86,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
           grade_preference: selectedGrade,
           study_goal_minutes: dailyGoal,
           focus_subjects: selectedSubjects,
+          stream: classHasStreams(selectedGrade) ? selectedStream : '',
           onboarding_completed: true,
         });
 
@@ -98,7 +110,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
 
   const STEPS = [
     ['Your class', "Pick the class you're studying in. Your dashboard, syllabus and search show only this class."],
-    ['Focus subjects', 'Choose the subjects you want on top of your dashboard. All subjects stay available. Optional.'],
+    [
+      classHasStreams(selectedGrade) ? 'Your stream & subjects' : 'Focus subjects',
+      classHasStreams(selectedGrade)
+        ? 'Pick your stream and we will put its subjects first. Every other subject stays open too.'
+        : 'Choose the subjects you want on top of your dashboard. All subjects stay available. Optional.',
+    ],
     ['Daily target & reminders', 'How many minutes a day, and should we email you a nudge?'],
     ['All set!', 'Check your choices and start learning.'],
   ];
@@ -148,6 +165,25 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                   this later in Profile; progress is kept.
                 </p>
               )}
+            </div>
+          )}
+
+          {step === 2 && classHasStreams(selectedGrade) && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pb-4">
+              {STREAMS.map((stream) => (
+                <button
+                  key={stream.id}
+                  type="button"
+                  aria-pressed={selectedStream === stream.id}
+                  onClick={() => pickStream(stream.id)}
+                  className={`p-3.5 rounded-[18px] text-left space-y-1 ${chip(selectedStream === stream.id)}`}
+                >
+                  <span className="block text-[14px]">{stream.label}</span>
+                  <span className={`block text-[11px] font-semibold leading-snug ${selectedStream === stream.id ? 'text-white/85' : 'text-[#6B7280]'}`}>
+                    {stream.blurb}
+                  </span>
+                </button>
+              ))}
             </div>
           )}
 

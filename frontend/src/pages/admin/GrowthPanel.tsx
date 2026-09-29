@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { DailyStats, StatCounter, StatsService, TotalStats } from '../../services/stats';
-import { isFirebaseConfigured } from '../../services/firebase';
 import { Card, StatCard } from './adminUi';
 
 const METRICS: { key: StatCounter; label: string }[] = [
@@ -36,7 +35,7 @@ export const GrowthPanel: React.FC<{ totalStudents?: number }> = ({ totalStudent
   if (error) {
     return (
       <Card className="p-5 text-sm font-semibold text-[#8A2E17]">
-        Analytics unavailable: {error}. Deploy the Firestore rules and the stats Cloud Functions.
+        Analytics unavailable: {error}.
       </Card>
     );
   }
@@ -69,7 +68,6 @@ export const GrowthPanel: React.FC<{ totalStudents?: number }> = ({ totalStudent
           <TrendingUp className="w-4 h-4" />
         </span>
         <h3 id="growth-title" className="text-lg text-[#1E2233]">Growth</h3>
-        {!isFirebaseConfigured && <span className="text-[11px] font-bold text-[#8A5A14] bg-[#FFF1D6] rounded-full px-2 py-0.5">Demo data from this browser</span>}
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6 gap-3">

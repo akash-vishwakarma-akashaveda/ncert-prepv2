@@ -17,6 +17,8 @@ import { LogoMark } from '../../components/common/Logo';
 import { FOCUS_MODE_STYLE as MODE_STYLE } from '../../components/pomodoro/FloatingPomodoroWidget';
 import { tintVars } from '../stage';
 import { EmptyState, PageHeader, ProgressBar, SubjectCover, btnPrimary, btnSecondary, card, lessonPath } from '../ui';
+import { youtubeThumbnail } from '../../services/youtubeApi';
+import { COMING_SOON_NOTE, DOUBTS_COMING_SOON } from '../../data/featureFlags';
 
 export const DoubtsPage: React.FC = () => {
   const { isAdmin } = useAuth();
@@ -29,8 +31,19 @@ export const DoubtsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <PageHeader section="doubts" title="Doubts" description="Questions you asked under lessons. Only you and your educator can see them." />
-      {myDoubts.length === 0 ? (
+      <PageHeader
+        section="doubts"
+        title="Doubts"
+        description={DOUBTS_COMING_SOON ? 'Ask an educator about anything you are stuck on.' : 'Questions you asked under lessons. Only you and your educator can see them.'}
+      />
+      {DOUBTS_COMING_SOON ? (
+        <EmptyState
+          icon={<MessageCircleQuestion className="w-6 h-6" />}
+          title="Coming soon"
+          body={COMING_SOON_NOTE}
+          action={<Link to="/app/subjects" className={btnPrimary}>Go to my subjects</Link>}
+        />
+      ) : myDoubts.length === 0 ? (
         <EmptyState
           icon={<MessageCircleQuestion className="w-6 h-6" />}
           title="No doubts yet"
@@ -68,7 +81,11 @@ export const SavedPage: React.FC = () => {
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
           {saved.map((v) => (
             <li key={v.youtube_id} className={`${card} p-4 flex flex-col gap-3 ${v.isActive ? '' : 'opacity-60'}`}>
-              <SubjectCover subject={v.subject} size="sm" className="h-[76px] rounded-2xl" />
+              {v.isActive ? (
+                <img src={youtubeThumbnail(v.youtube_id)} alt="" loading="lazy" className="h-[76px] w-full object-cover rounded-2xl" />
+              ) : (
+                <SubjectCover subject={v.subject} size="sm" className="h-[76px] rounded-2xl" />
+              )}
               <div className="min-w-0 flex-1">
                 <p className="text-[13.5px] font-extrabold leading-snug line-clamp-2">{v.video_title}</p>
                 <p className={`mt-0.5 text-[11.5px] font-bold truncate ${v.isActive ? 'text-[#6B7280]' : 'text-[#E0603F]'}`}>
@@ -385,7 +402,11 @@ const ReminderPreview: React.FC = () => {
   );
 };
 
-export const RemindersPage: React.FC = () => (
+export const RemindersPage: React.FC = () => {
+  // Reminders are emailed study nudges for students; educators have nothing to configure here.
+  const { isAdmin } = useAuth();
+  if (isAdmin) return <Navigate to="/app" replace />;
+  return (
   <div className="space-y-6">
     <PageHeader section="reminders" title="Reminders" description="Choose if, how often and when we email you your next lesson." />
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.6fr)_minmax(280px,1fr)] gap-5 items-start">
@@ -393,7 +414,8 @@ export const RemindersPage: React.FC = () => (
       <ReminderPreview />
     </div>
   </div>
-);
+  );
+};
 
 // Educators get their own account page, loaded only for admins.
 const AdminProfile = lazy(() => import('../../pages/admin/AdminProfile').then((m) => ({ default: m.AdminProfile })));

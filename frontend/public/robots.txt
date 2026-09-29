@@ -3,3 +3,5 @@ Allow: /
 Disallow: /app
 Disallow: /admin
 Disallow: /parent-consent
+
+Sitemap: https://ncert-prep.akashaveda.com/sitemap.xml

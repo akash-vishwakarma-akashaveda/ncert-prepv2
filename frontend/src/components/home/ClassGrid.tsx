@@ -1,5 +1,4 @@
 import React from 'react';
-import { ClassGroup } from '../../types';
 import { getClassTileStyle } from '../../data/colorTokens';
 
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
@@ -44,34 +43,33 @@ export const ClassTile: React.FC<{
   );
 };
 
-interface ClassGridProps {
-  classes: ClassGroup[];
-  onSelectClass: (classSort: string) => void;
-}
-
-export const ClassGrid: React.FC<ClassGridProps> = ({ classes, onSelectClass }) => (
-  <div className="space-y-4">
-    <div>
-      <h2 id="visual-grid-title" className="text-[25px] text-[#1E2233]">
-        Browse any class
-      </h2>
-      <p className="text-[13.5px] font-semibold text-[#6B7280]">
-        Visitors can look around and watch free preview lessons. Sign in to save progress, streaks and doubts.
-      </p>
-    </div>
-
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3.5">
-      {classes.map((cls, i) => (
-        <ClassTile
-          key={cls.class_sort}
-          classSort={cls.class_sort}
-          size="lg"
-          onClick={() => onSelectClass(cls.class_sort)}
-          label={`${cls.class_display}: ${cls.subjects.length} subjects, ${cls.videoCount} lessons`}
-          data-reveal=""
-          style={{ '--reveal-delay': `${Math.min(i, 11) * 40}ms` } as React.CSSProperties}
-        />
-      ))}
-    </div>
-  </div>
-);
+/** Landing class card: flat colour, big roman numeral. On hover it lifts and tilts, a light sheen
+ * sweeps across, the corner blob swells and the numeral pops (all CSS, see .class-card). */
+export const ClassCard: React.FC<{
+  classSort: string;
+  label: string;
+  lessons?: number;
+  onClick: () => void;
+  tilt?: number;
+  selected?: boolean;
+  compact?: boolean;
+}> = ({ classSort, label, lessons, onClick, tilt = -3, selected, compact }) => {
+  const t = getClassTileStyle(classSort);
+  const n = parseInt(classSort, 10);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={selected}
+      className={`class-card ${compact ? 'class-card-sm' : ''}`}
+      style={{ ['--bg' as string]: t.bg, ['--line' as string]: t.border, ['--ink' as string]: t.ink, ['--tilt' as string]: `${tilt}deg` }}
+    >
+      <span aria-hidden="true" className="class-card-blob" />
+      <span aria-hidden="true" className="class-card-sheen" />
+      <span className="class-card-roman font-display">{romanClass(classSort)}</span>
+      <span className="relative text-[10.5px] font-extrabold tracking-[0.1em] text-[#4B5168]">CLASS {n}</span>
+      {lessons && !compact ? <span className="relative text-[10.5px] font-bold text-[#6B7280]">{lessons} lessons</span> : null}
+    </button>
+  );
+};

@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { Shield, LogOut, Mail, KeyRound, MessageCircleQuestion, MessageSquare, Sliders, Database, Eye, Layers, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { DoubtsService } from '../../services/content';
-import { FirestoreService } from '../../services/firestore';
+import { FeedbackService } from '../../services/feedback';
 import { Card, SectionHeader, StatCard, inputClass, primaryButton, secondaryButton } from './adminUi';
 
 const SIGN_IN_METHOD: Record<string, string> = { 'google.com': 'Google account', password: 'Email and password' };
 
 /** Educator account page: identity, reply name, workload and access. Students get ProfileSettings instead. */
 export const AdminProfile: React.FC = () => {
-  const { user, isDemoUser, reauthProviderId, updateProfile, signOut } = useAuth();
+  const { user, reauthProviderId, updateProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState(user?.displayName || '');
   const [saving, setSaving] = useState(false);
@@ -20,7 +20,7 @@ export const AdminProfile: React.FC = () => {
 
   useEffect(() => {
     let active = true;
-    Promise.all([DoubtsService.listAll(), FirestoreService.getFeedbackList()])
+    Promise.all([DoubtsService.listAll(), FeedbackService.listAll()])
       .then(([doubts, feedback]) => {
         if (active)
           setCounts({ doubts: doubts.filter((d) => d.status === 'open').length, feedback: feedback.filter((f) => f.status !== 'reviewed').length });
@@ -57,7 +57,7 @@ export const AdminProfile: React.FC = () => {
     navigate('/', { replace: true });
   };
 
-  const method = isDemoUser ? 'Demo account (this browser only)' : SIGN_IN_METHOD[reauthProviderId || ''] || 'Signed in';
+  const method = SIGN_IN_METHOD[reauthProviderId || ''] || 'Signed in';
   const links = [
     { label: 'Student doubts', to: '/app?tab=doubts', Icon: MessageCircleQuestion },
     { label: 'Dashboard control', to: '/app?tab=student-control', Icon: Sliders },
@@ -83,7 +83,6 @@ export const AdminProfile: React.FC = () => {
                   <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#1E2233] text-white text-[11px] font-extrabold">
                     <Shield className="w-3.5 h-3.5 text-[#A9E6D3]" /> Administrator
                   </span>
-                  {isDemoUser && <span className="px-2.5 py-0.5 rounded-full bg-[#FFF1D6] text-[#8A5A14] text-[11px] font-extrabold">Demo</span>}
                 </div>
                 <p className="mt-1 text-sm font-semibold text-[#6B7280] flex flex-wrap gap-x-4 gap-y-1">
                   <span className="inline-flex items-center gap-1.5">
@@ -130,8 +129,8 @@ export const AdminProfile: React.FC = () => {
               <Shield className="w-5 h-5 text-[#3B4FE0]" /> Access and security
             </h3>
             <ul className="space-y-2 text-sm font-semibold text-[#4B5168]">
-              <li>Admin rights come from <code className="px-1.5 py-0.5 rounded bg-[#F1F3FB] text-[12px]">users/{'{uid}'}.role = "admin"</code>, set only in the Firebase Console. They can't be granted or removed from this app.</li>
-              <li>To hand over or remove admin access, change that field in the Firebase Console.</li>
+              <li>Admin rights come from the <code className="px-1.5 py-0.5 rounded bg-[#F1F3FB] text-[12px]">role</code> column on the account, set only via the backend. They can't be granted or removed from this app.</li>
+              <li>To hand over or remove admin access, run <code className="px-1.5 py-0.5 rounded bg-[#F1F3FB] text-[12px]">npm run seed:admin</code> in <code className="px-1.5 py-0.5 rounded bg-[#F1F3FB] text-[12px]">prep_ncert/backend</code>.</li>
               <li>Sign out when you use a shared or school computer.</li>
             </ul>
             <button onClick={logOut} className={`${secondaryButton} mt-1`}>

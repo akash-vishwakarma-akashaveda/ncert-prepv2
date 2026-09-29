@@ -1,7 +1,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { MessageCircleQuestion } from 'lucide-react';
 import { Doubt } from '../types';
 import { AskDoubtInput, DoubtsService } from '../services/content';
+import { getSocket } from '../services/socket';
 import { useAuth } from './AuthContext';
+import { useAppToast } from './ToastContext';
 
 interface DoubtsContextType {
   myDoubts: Doubt[];
@@ -15,6 +18,7 @@ const DoubtsContext = createContext<DoubtsContextType | undefined>(undefined);
 
 export const DoubtsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
+  const { pushToast } = useAppToast();
   const [myDoubts, setMyDoubts] = useState<Doubt[]>([]);
 
   useEffect(() => {
@@ -22,7 +26,37 @@ export const DoubtsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setMyDoubts([]);
       return;
     }
-    return DoubtsService.subscribeMine(user.userId, setMyDoubts);
+    let cancelled = false;
+    DoubtsService.fetchMine().then((rows) => {
+      if (!cancelled) setMyDoubts(rows);
+    });
+
+    // Live updates when an educator replies — the socket authenticates off the session cookie
+    // and the server puts this connection in a room named after this user's id.
+    const socket = getSocket();
+    const onAnswered = (updated: Doubt) => {
+      setMyDoubts((prev) => (prev.some((d) => d.id === updated.id) ? prev.map((d) => (d.id === updated.id ? updated : d)) : [updated, ...prev]));
+      pushToast({
+        title: 'Teacher replied to your doubt!',
+        message: updated.answer ? `"${updated.answer.slice(0, 90)}${updated.answer.length > 90 ? '…' : ''}"` : 'Your question has been answered.',
+        icon: MessageCircleQuestion,
+        iconBg: 'bg-[#FFE8E0]',
+        iconColor: 'text-[#E0603F]',
+        actionUrl: `/app/lesson/${encodeURIComponent(updated.youtube_id)}`,
+      });
+    };
+    // Status changes (closed by an educator, etc.) — refresh the row quietly, no toast.
+    const onUpdated = (updated: Doubt) => setMyDoubts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+    socket.on('doubt:answered', onAnswered);
+    socket.on('doubt:updated', onUpdated);
+    socket.connect();
+
+    return () => {
+      cancelled = true;
+      socket.off('doubt:answered', onAnswered);
+      socket.off('doubt:updated', onUpdated);
+      socket.disconnect();
+    };
   }, [user?.userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const askDoubt = useCallback(
@@ -33,6 +67,8 @@ export const DoubtsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         userName: user.displayName || null,
         userEmail: user.email,
       });
+      const rows = await DoubtsService.fetchMine();
+      setMyDoubts(rows);
     },
     [user]
   );
@@ -42,8 +78,14 @@ export const DoubtsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       myDoubts,
       unreadCount: myDoubts.filter((d) => d.student_unread).length,
       askDoubt,
-      markRead: (doubt: Doubt) => DoubtsService.markRead(doubt),
-      closeDoubt: (doubt: Doubt) => DoubtsService.closeByStudent(doubt),
+      markRead: async (doubt: Doubt) => {
+        await DoubtsService.markRead(doubt);
+        setMyDoubts((prev) => prev.map((d) => (d.id === doubt.id ? { ...d, student_unread: false } : d)));
+      },
+      closeDoubt: async (doubt: Doubt) => {
+        await DoubtsService.closeByStudent(doubt);
+        setMyDoubts((prev) => prev.map((d) => (d.id === doubt.id ? { ...d, status: 'closed', student_unread: false } : d)));
+      },
     }),
     [myDoubts, askDoubt]
   );

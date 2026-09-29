@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
-import { X, AlertCircle, Shield, Sparkles, Mail, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect} from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { X, AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, Gift } from 'lucide-react';
 import { LogoMark } from '../common/Logo';
+import { preloadGoogleSignIn } from '../../services/auth';
 import { useAuth } from '../../context/AuthContext';
-import { isFirebaseConfigured } from '../../services/firebase';
 
 interface AuthPagesProps {
   onSuccess?: () => void;
   isModal?: boolean;
 }
 
-type Mode = 'choose' | 'signin' | 'signup' | 'forgot';
+type Mode = 'signin' | 'signup' | 'forgot';
 
 // Popup closed or cancelled by the user: not an error worth showing.
 const QUIET_CODES = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
@@ -46,19 +47,28 @@ const GoogleMark = () => (
 );
 
 /**
- * Sign-in / registration through Firebase Auth: Google, or email + password.
+ * Sign-in / registration via the backend: Google (Google Identity Services), or email + password.
  * The DPDP notice and consent (with parental consent for under-18s) follow immediately after,
  * in the ConsentGate, before any other data is processed.
  */
 export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true }) => {
-  const { authModalOpen, setAuthModalOpen, signInWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset, signInDemo } = useAuth();
-  const [mode, setMode] = useState<Mode>('choose');
+  const { authModalOpen, setAuthModalOpen, signInWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset } = useAuth();
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState<Mode>('signin');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState(() => searchParams.get('ref') || '');
+  const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  // Google's script is fetched as the form appears so the click that follows can open the popup
+  // immediately; opening it after an await risks the browser treating it as an unrequested pop-up.
+  useEffect(() => {
+    if (!isModal || authModalOpen) preloadGoogleSignIn();
+  }, [isModal, authModalOpen]);
 
   if (isModal && !authModalOpen) return null;
 
@@ -68,7 +78,7 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
     setInfo(null);
   };
   const close = () => {
-    go('choose');
+    go('signin');
     setPassword('');
     setAuthModalOpen(false);
   };
@@ -92,7 +102,7 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
     if (mode === 'signup') {
       if (name.trim().length < 2) return setError('Enter your name.');
       if (password.length < 8) return setError('Use at least 8 characters for your password.');
-      return run(() => signUpWithEmail(name, email, password));
+      return run(() => signUpWithEmail(name, email, password, referralCode));
     }
     if (mode === 'forgot') {
       return run(async () => {
@@ -103,14 +113,13 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
   };
 
   const titles: Record<Mode, [string, string]> = {
-    choose: ['Welcome to NCERT Prep', 'Sign in or create your free account to keep your progress, streak and saved lessons on every device.'],
-    signin: ['Sign in with email', 'Use the email and password you registered with.'],
+    signin: ['Welcome to NCERT Prep', 'Sign in or create your free account to keep your progress, streak and saved lessons on every device.'],
     signup: ['Create your account', "We'll email you a link to verify your address. Next, you'll see our privacy notice and give consent."],
     forgot: ['Reset your password', "Enter your account's email and we'll send you a reset link."],
   };
 
   const content = (
-    <div className="relative w-full max-w-[440px] max-h-[92vh] overflow-y-auto bg-white rounded-[32px] border-[3px] border-[color:var(--card-line)] shadow-[0_8px_0_#E3E5EC] p-6 sm:p-[30px] flex flex-col gap-4 animate-pop-soft">
+    <div className="relative w-full max-w-[440px] bg-white rounded-[32px] border-[3px] border-[color:var(--card-line)] shadow-[0_8px_0_#E3E5EC] p-6 sm:p-[30px] flex flex-col gap-4 animate-pop-soft">
       {isModal && (
         <button
           onClick={close}
@@ -121,10 +130,10 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
         </button>
       )}
 
-      {mode === 'choose' ? (
+      {mode === 'signin' ? (
         <LogoMark className="w-[52px] h-[52px]" />
       ) : (
-        <button onClick={() => go(mode === 'forgot' ? 'signin' : 'choose')} className="self-start inline-flex items-center gap-1 text-xs font-extrabold text-[#6B7280] hover:text-[#1E2233] cursor-pointer">
+        <button onClick={() => go('signin')} className="self-start inline-flex items-center gap-1 text-xs font-extrabold text-[#6B7280] hover:text-[#1E2233] cursor-pointer">
           <ArrowLeft className="w-4 h-4" /> Back
         </button>
       )}
@@ -144,30 +153,23 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
         </p>
       )}
 
-      {mode === 'choose' ? (
-        <>
-          <button
-            onClick={() => run(signInWithGoogle)}
-            disabled={submitting}
-            className="btn-3d [--edge:#E3E5EC] w-full flex items-center justify-center gap-3 p-3.5 rounded-2xl bg-white border-[3px] border-[#E3E5EC] hover:bg-[#F7F8FC] text-sm font-extrabold text-[#1E2233] cursor-pointer disabled:opacity-60"
-          >
-            <GoogleMark />
-            {submitting ? 'Opening Google…' : 'Continue with Google'}
-          </button>
-          <div className="flex items-center gap-3 text-[11px] font-extrabold text-[#9AA1B4]">
-            <span className="flex-1 border-t-2 border-[color:var(--card-line)]" /> OR <span className="flex-1 border-t-2 border-[color:var(--card-line)]" />
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <button onClick={() => go('signup')} className="btn-3d [--edge:var(--brand-edge)] flex items-center justify-center gap-2 p-3 rounded-2xl bg-[color:var(--brand)] text-white text-[13px] font-extrabold cursor-pointer">
-              <Mail className="w-4 h-4" /> Register with email
-            </button>
-            <button onClick={() => go('signin')} className="flex items-center justify-center p-3 rounded-2xl bg-[color:var(--brand-soft)] border-2 border-[color:var(--brand-line)] text-[color:var(--brand)] text-[13px] font-extrabold cursor-pointer">
-              Sign in with email
-            </button>
-          </div>
-        </>
-      ) : (
-        <form onSubmit={submit} className="space-y-3.5" noValidate>
+      <>
+          {mode !== 'forgot' && (
+            <>
+              <button
+                onClick={() => run(signInWithGoogle)}
+                disabled={submitting}
+                className="btn-3d [--edge:#E3E5EC] w-full flex items-center justify-center gap-3 p-3.5 rounded-2xl bg-white border-[3px] border-[#E3E5EC] hover:bg-[#F7F8FC] text-sm font-extrabold text-[#1E2233] cursor-pointer disabled:opacity-60"
+              >
+                <GoogleMark />
+                {submitting ? 'Opening Google…' : 'Continue with Google'}
+              </button>
+              <div className="flex items-center gap-3 text-[11px] font-extrabold text-[#9AA1B4]">
+                <span className="flex-1 border-t-2 border-[color:var(--card-line)]" /> OR <span className="flex-1 border-t-2 border-[color:var(--card-line)]" />
+              </div>
+            </>
+          )}
+          <form onSubmit={submit} className="space-y-3.5" noValidate>
           {mode === 'signup' && (
             <div>
               <label htmlFor="auth-name" className={label}>Your name</label>
@@ -188,17 +190,43 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
                   </button>
                 )}
               </div>
-              <input
-                id="auth-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                minLength={mode === 'signup' ? 8 : undefined}
-                className={input}
-                required
-              />
+              <div className="relative">
+                <input
+                  id="auth-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                  minLength={mode === 'signup' ? 8 : undefined}
+                  className={`${input} pr-11`}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#9AA1B4] hover:text-[#1E2233] cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {mode === 'signup' && <p className="mt-1 text-[11px] font-semibold text-[#6B7280]">At least 8 characters.</p>}
+            </div>
+          )}
+          {mode === 'signup' && (
+            <div>
+              <label htmlFor="auth-referral" className={label}>Referral code (optional)</label>
+              <div className="relative">
+                <Gift className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9AA1B4]" />
+                <input
+                  id="auth-referral"
+                  value={referralCode}
+                  onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                  placeholder="e.g. VZ6WXWU"
+                  maxLength={20}
+                  className={`${input} pl-10 uppercase`}
+                />
+              </div>
             </div>
           )}
           <button
@@ -216,30 +244,8 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
               </button>
             </p>
           )}
-        </form>
-      )}
-
-      {!isFirebaseConfigured && mode === 'choose' && (
-        <div className="rounded-[18px] bg-[#FFF6E2] border-2 border-dashed border-[#FFD97A] p-3.5 space-y-2.5">
-          <p className="text-[11.5px] font-bold text-[#8A5A14]">Development mode: no Firebase keys, so accounts live only in this browser.</p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => run(() => signInDemo('aarav.sharma@ncertprep.demo', 'Aarav Sharma', 'student'))}
-              disabled={submitting}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-[14px] bg-white border-2 border-[#E3E5EC] text-xs font-extrabold text-[#1E2233] cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-[color:var(--brand)]" /> Demo student
-            </button>
-            <button
-              onClick={() => run(() => signInDemo('admin@ncertprep.demo', 'Demo Admin', 'admin'))}
-              disabled={submitting}
-              className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-[14px] bg-[#1E2233] text-xs font-extrabold text-white cursor-pointer"
-            >
-              <Shield className="w-3.5 h-3.5" /> Demo admin
-            </button>
-          </div>
-        </div>
-      )}
+          </form>
+        </>
 
       <p className="text-[11px] font-semibold leading-relaxed text-[#9AA1B4] text-center">
         Before we use any of your data you'll see our{' '}
@@ -254,8 +260,10 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
   if (!isModal) return <div className="flex justify-center p-4">{content}</div>;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E2233]/50 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Sign in" onClick={close}>
-      <div className="w-full max-w-[440px]" onClick={(e) => e.stopPropagation()}>
+    // The overlay scrolls, not the card: a scrollbar inside the rounded card poked out past its
+    // corners on the taller sign-up form. my-auto keeps short forms centred.
+    <div className="fixed inset-0 z-50 flex overflow-y-auto p-4 bg-[#1E2233]/50 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Sign in" onClick={close}>
+      <div className="w-full max-w-[440px] m-auto" onClick={(e) => e.stopPropagation()}>
         {content}
       </div>
     </div>

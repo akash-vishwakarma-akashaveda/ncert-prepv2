@@ -2,10 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { UserProgress, XpTransaction } from '../types';
 import { useAuth } from './AuthContext';
 import { useCatalogContext } from './CatalogContext';
-import { FirestoreService } from '../services/firestore';
 import { StorageService } from '../services/storage';
-import { LeaderboardService } from '../services/leaderboard';
 import { XpService } from '../services/xpService';
+import { ProgressService, BackendXpService } from '../services/progress';
 import { XP_PER_LEVEL } from '../data/gamification';
 import { normalizeClassSort } from '../data/classFormat';
 
@@ -33,8 +32,21 @@ interface ProgressContextType {
 
 const ProgressContext = createContext<ProgressContextType | undefined>(undefined);
 
+// Anonymous "visitor" browsing: progress lives only in this browser's localStorage.
+function saveVisitorProgress(youtubeId: string, updates: Partial<Pick<UserProgress, 'completed' | 'favorited'>>) {
+  const map = StorageService.getUserProgress('visitor');
+  const existing = map[youtubeId];
+  map[youtubeId] = {
+    youtube_id: youtubeId,
+    completed: updates.completed ?? existing?.completed ?? false,
+    favorited: updates.favorited ?? existing?.favorited ?? false,
+    last_viewed: Date.now(),
+  };
+  StorageService.setUserProgress('visitor', map);
+}
+
 export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, recordStudyActivity } = useAuth();
+  const { user, recordStudyActivity, updateProfile } = useAuth();
   const { videoMap } = useCatalogContext();
   const activeClass = user?.grade_preference ? normalizeClassSort(user.grade_preference) : '10';
 
@@ -44,12 +56,21 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [xpHistory, setXpHistory] = useState<XpTransaction[]>([]);
   const [totalXp, setTotalXp] = useState<number>(0);
 
+  // Signed-in students: the Postgres backend is authoritative (history[0] is the most recent
+  // transaction — the list is newest-first — so its balanceAfter is the current total).
+  // Unsigned "visitor" browsing keeps the original local-only path; this backend requires a
+  // session, so there's nothing for a visitor to call.
   const refreshXp = useCallback(async () => {
-    const targetUserId = user ? user.userId : 'visitor';
-    const history = await XpService.getXpHistory(targetUserId, activeClass);
-    setXpHistory(history);
-    const balance = XpService.getXpBalance(targetUserId, activeClass);
-    setTotalXp(balance.totalXp);
+    if (user) {
+      const history = await BackendXpService.getXpHistory(activeClass);
+      setXpHistory(history);
+      setTotalXp(history[0]?.balanceAfter ?? 0);
+    } else {
+      const history = await XpService.getXpHistory('visitor', activeClass);
+      setXpHistory(history);
+      const balance = XpService.getXpBalance('visitor', activeClass);
+      setTotalXp(balance.totalXp);
+    }
   }, [user, activeClass]);
 
   // Load progress when user changes or on boot
@@ -65,13 +86,12 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (user) {
         try {
-          const map = await FirestoreService.getUserProgress(user.userId);
+          const map = await ProgressService.fetchAll();
           if (isMounted) {
             setProgressMap(map);
             if (user.last_watched_video) {
               setLastWatchedId(user.last_watched_video);
             }
-            await XpService.reconcileWithProgress(targetId, map, videoMap, activeClass);
             await refreshXp();
           }
         } catch (err) {
@@ -125,7 +145,6 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     async (youtubeId: string) => {
       const current = isCompleted(youtubeId);
       const nextState = !current;
-      const targetUserId = user ? user.userId : 'visitor';
       const vid = videoMap?.get(youtubeId);
       const lessonClass = normalizeClassSort(vid?.class_sort || activeClass);
 
@@ -141,15 +160,16 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }));
 
       try {
-        await FirestoreService.saveVideoProgress(targetUserId, youtubeId, {
-          completed: nextState,
-        });
-
-        // XP ledger accounting: credit on completion, reverse on uncheck with class isolation
-        if (nextState) {
-          await XpService.recordLessonCompleted(targetUserId, youtubeId, vid?.video_title, lessonClass);
+        if (user) {
+          // The backend awards/reverses lesson XP itself, class-scoped, idempotently.
+          await ProgressService.upsert(youtubeId, { completed: nextState });
         } else {
-          await XpService.recordLessonUncompleted(targetUserId, youtubeId, vid?.video_title, lessonClass);
+          saveVisitorProgress(youtubeId, { completed: nextState });
+          if (nextState) {
+            await XpService.recordLessonCompleted('visitor', youtubeId, vid?.video_title, lessonClass);
+          } else {
+            await XpService.recordLessonUncompleted('visitor', youtubeId, vid?.video_title, lessonClass);
+          }
         }
         await refreshXp();
       } catch (err) {
@@ -164,7 +184,6 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     async (youtubeId: string) => {
       const current = isFavorited(youtubeId);
       const nextState = !current;
-      const targetUserId = user ? user.userId : 'visitor';
 
       // Optimistic update
       setProgressMap((prev) => ({
@@ -178,9 +197,11 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }));
 
       try {
-        await FirestoreService.saveVideoProgress(targetUserId, youtubeId, {
-          favorited: nextState,
-        });
+        if (user) {
+          await ProgressService.upsert(youtubeId, { favorited: nextState });
+        } else {
+          saveVisitorProgress(youtubeId, { favorited: nextState });
+        }
       } catch (err) {
         console.error('Failed to toggle favorite:', err);
       }
@@ -192,7 +213,6 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const recordVideoWatched = useCallback(
     async (youtubeId: string) => {
       setLastWatchedId(youtubeId);
-      const targetUserId = user ? user.userId : 'visitor';
 
       // Record in progress map
       setProgressMap((prev) => ({
@@ -206,14 +226,19 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }));
 
       try {
-        await FirestoreService.saveVideoProgress(targetUserId, youtubeId, {});
-        await FirestoreService.updateLastWatched(targetUserId, youtubeId);
-        if (user) await recordStudyActivity();
+        if (user) {
+          await ProgressService.upsert(youtubeId, {});
+          await updateProfile({ last_watched_video: youtubeId });
+          await recordStudyActivity();
+        } else {
+          saveVisitorProgress(youtubeId, {});
+          StorageService.setLastWatchedVideo('visitor', youtubeId);
+        }
       } catch (err) {
         console.error('Failed to record video watch:', err);
       }
     },
-    [user, recordStudyActivity]
+    [user, recordStudyActivity, updateProfile]
   );
 
   // Aggregates (strictly isolated to active enrolled class)
@@ -245,8 +270,7 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Award XP for 25-minute Pomodoro study sessions in active class
   const awardFocusXp = useCallback(async () => {
-    const targetUserId = user ? user.userId : 'visitor';
-    const tx = await XpService.recordFocusSession(targetUserId, activeClass);
+    const tx = user ? await BackendXpService.recordFocusSession(activeClass) : await XpService.recordFocusSession('visitor', activeClass);
     await refreshXp();
     return tx;
   }, [user, activeClass, refreshXp]);
@@ -254,8 +278,9 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Award XP for maintaining daily streaks in active class
   const awardStreakXp = useCallback(
     async (streakDays: number) => {
-      const targetUserId = user ? user.userId : 'visitor';
-      const tx = await XpService.recordStreakBonus(targetUserId, streakDays, activeClass);
+      const tx = user
+        ? await BackendXpService.recordStreakBonus(activeClass, streakDays)
+        : await XpService.recordStreakBonus('visitor', streakDays, activeClass);
       await refreshXp();
       return tx;
     },
@@ -270,12 +295,6 @@ export const ProgressProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     window.addEventListener('quickprep-focus-completed', onFocusCompleted);
     return () => window.removeEventListener('quickprep-focus-completed', onFocusCompleted);
   }, [awardFocusXp]);
-
-  // Keep leaderboard in sync with class-isolated completed lessons & total XP
-  useEffect(() => {
-    if (!user || user.role === 'admin') return;
-    LeaderboardService.syncUserLeaderboardEntry(user, completedCount, undefined, totalXp);
-  }, [user, completedCount, totalXp]);
 
   const level = useMemo(() => Math.floor(totalXp / XP_PER_LEVEL) + 1, [totalXp]);
   const xpInLevel = useMemo(() => totalXp % XP_PER_LEVEL, [totalXp]);

@@ -15,6 +15,7 @@ import {
   inputClass,
   primaryButton,
   secondaryButton,
+  useConfirm,
 } from './adminUi';
 
 interface CurriculumSectionProps {
@@ -307,6 +308,7 @@ const EditDialog: React.FC<{
 }> = ({ editing, tree, classSort, subject, notes, busy, onClose, onSave, onCreated }) => {
   const node = editing.node;
   const isNew = !node;
+  const { confirm, confirmNode } = useConfirm();
 
   const [classNumber, setClassNumber] = useState(() => {
     const used = new Set(tree.map((c) => c.class_sort));
@@ -397,7 +399,7 @@ const EditDialog: React.FC<{
   };
 
   const remove = async () => {
-    if (!node || !window.confirm(`Delete this ${editing.kind} record? This cannot be undone.`)) return;
+    if (!node || !(await confirm(`Delete this ${editing.kind} record? This cannot be undone.`))) return;
     const kind = editing.kind === 'class' ? 'classes' : editing.kind === 'subject' ? 'subjects' : 'chapters';
     const id =
       editing.kind === 'class'
@@ -409,6 +411,7 @@ const EditDialog: React.FC<{
   const used = new Set(tree.map((c) => c.class_sort));
 
   return (
+    <>
     <Modal title={title.charAt(0).toUpperCase() + title.slice(1)} subtitle={subtitle} onClose={onClose}>
       <form onSubmit={submit} className="space-y-4">
         {error && <p className="p-3 text-xs text-[#8A2E17] bg-[#FFE9E2] border border-[#FFC3B1] rounded-[14px]">{error}</p>}
@@ -499,5 +502,7 @@ const EditDialog: React.FC<{
         </div>
       </form>
     </Modal>
+    {confirmNode}
+    </>
   );
 };

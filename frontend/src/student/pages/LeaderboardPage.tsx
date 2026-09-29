@@ -50,7 +50,7 @@ export const LeaderboardPage: React.FC = () => {
     const fetchEntries = async () => {
       setLoading(true);
       try {
-        const list = await LeaderboardService.getClassLeaderboard(selectedClass, user, completedCount, totalXp);
+        const list = await LeaderboardService.getClassLeaderboard(selectedClass, user);
         if (active) {
           setEntries(list);
           setLoading(false);

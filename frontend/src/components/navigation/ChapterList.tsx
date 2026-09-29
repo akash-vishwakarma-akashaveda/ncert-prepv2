@@ -14,6 +14,7 @@ import { Video, ChapterGroup, NotesTarget } from '../../types';
 import { useProgress } from '../../context/ProgressContext';
 import { useAuth } from '../../context/AuthContext';
 import { isLessonUnlocked } from '../../services/accessControl';
+import { chapterNumbers } from '../../student/ui';
 import { useDashboardConfig } from '../../hooks/useDashboardConfig';
 
 interface ChapterListProps {
@@ -42,7 +43,7 @@ export const ChapterList: React.FC<ChapterListProps> = ({
 
   return (
     <div className="space-y-6 pb-20">
-      {chapters.map((chapter, chapterIndex) => (
+      {chapters.map((chapter, chapterIndex, all) => (
         <div
           key={chapter.key}
           className="bg-white border-2 border-[#E3E5EC] rounded-[28px] p-5 sm:p-7 shadow-[0_4px_0_var(--card-line)] space-y-5 transition-all duration-300 hover:shadow-md"
@@ -96,7 +97,8 @@ export const ChapterList: React.FC<ChapterListProps> = ({
               const completed = isCompleted(video.youtube_id);
               const favorited = isFavorited(video.youtube_id);
               const deactivated = !video.isActive;
-              const unlocked = isLessonUnlocked(video, user, chapterIndex, videoIndex, policy);
+              // Per-book position: a subject with two books has two "Chapter 1"s, and both are free previews.
+              const unlocked = isLessonUnlocked(video, user, chapterNumbers(all)[chapterIndex] - 1, videoIndex, policy);
               const isPreview = !user && unlocked;
               const isLocked = !unlocked;
 

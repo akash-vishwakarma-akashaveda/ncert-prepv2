@@ -1,6 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import { loadYouTubeIframeApi, YTPlayer, YT_STATE_ENDED, YT_UNAVAILABLE_ERROR_CODES } from '../services/youtubeApi';
+import {
+  loadYouTubeIframeApi,
+  YTPlayer,
+  YT_STATE_ENDED,
+  YT_STATE_PLAYING,
+  YT_UNAVAILABLE_ERROR_CODES,
+} from '../services/youtubeApi';
+import { VideoService } from '../services/videos';
+
+const HEARTBEAT_SECONDS = 30;
 
 interface LessonPlayerProps {
   youtubeId: string;
@@ -33,6 +42,18 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ youtubeId, title, on
     const fail = () => !cancelled && setFailed(true);
     timers.push(window.setTimeout(fail, 12000));
 
+    // Approximate watch-time for the admin's revenue estimate: a fixed-size ping every 30s of
+    // continuous playback, not real seconds elapsed — good enough, and avoids needing getCurrentTime.
+    let heartbeatId: number | null = null;
+    const stopHeartbeat = () => {
+      if (heartbeatId !== null) window.clearInterval(heartbeatId);
+      heartbeatId = null;
+    };
+    const startHeartbeat = () => {
+      stopHeartbeat();
+      heartbeatId = window.setInterval(() => VideoService.sendWatchHeartbeat(youtubeId, HEARTBEAT_SECONDS), HEARTBEAT_SECONDS * 1000);
+    };
+
     loadYouTubeIframeApi()
       .then((YT) => {
         if (cancelled) return;
@@ -57,7 +78,11 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ youtubeId, title, on
                 }, 5000)
               );
             },
-            onStateChange: (e) => e.data === YT_STATE_ENDED && onEndedRef.current(),
+            onStateChange: (e) => {
+              if (e.data === YT_STATE_PLAYING) startHeartbeat();
+              else stopHeartbeat();
+              if (e.data === YT_STATE_ENDED) onEndedRef.current();
+            },
             onError: (e) => YT_UNAVAILABLE_ERROR_CODES.includes(e.data) && fail(),
           },
         });
@@ -67,6 +92,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ youtubeId, title, on
     return () => {
       cancelled = true;
       timers.forEach(clearTimeout);
+      stopHeartbeat();
       player?.destroy();
       host.innerHTML = '';
     };

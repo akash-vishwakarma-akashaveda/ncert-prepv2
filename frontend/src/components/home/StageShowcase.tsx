@@ -43,6 +43,13 @@ export const STAGES: {
   },
 ];
 
+// Chapter titles are sometimes stored fully upper-case in the sheet; shown verbatim that reads as
+// shouting ("Ready for THE WIT THAT WON HEARTS?"), so this is display-only for this marketing card.
+export function toDisplayTitle(text: string): string {
+  if (text !== text.toUpperCase() || text === text.toLowerCase()) return text;
+  return text.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+}
+
 const STATS = [
   { label: 'LESSONS', value: '12', Icon: BookOpenCheck, ink: '#0C8F78', soft: '#DDF5EE' },
   { label: 'STREAK', value: '5', Icon: Flame, ink: '#E0603F', soft: '#FFE8E0' },
@@ -56,7 +63,8 @@ export const StagePreview: React.FC<{ stage: (typeof STAGES)[number]; videos: Vi
     const inClass = videos.filter((v) => v.isActive && v.class_sort === stage.classSort);
     return {
       lesson: inClass[0],
-      subjects: Array.from(new Set(inClass.map((v) => v.subject))).slice(0, compact ? 2 : 3),
+      // Two chips so every stage's preview stays one row tall (a third one wrapped and made the card jump).
+      subjects: Array.from(new Set(inClass.map((v) => v.subject))).slice(0, 2),
     };
   }, [videos, stage.classSort, compact]);
 
@@ -67,13 +75,25 @@ export const StagePreview: React.FC<{ stage: (typeof STAGES)[number]; videos: Vi
           kids ? 'hero-kids text-[#1E2233] pr-28' : 'text-white bg-gradient-to-br from-[color:var(--brand)] to-[color:var(--brand-to)]'
         }`}
       >
-        {kids ? <KidsScene /> : <span className="hero-doodles opacity-90" />}
+        {kids ? (
+          <KidsScene />
+        ) : (
+          <>
+            <span className="hero-doodles opacity-90" />
+            <span
+              aria-hidden="true"
+              className="absolute -right-3 -bottom-3 w-20 h-20 rounded-[22px] bg-white/12 flex items-center justify-center rotate-6"
+            >
+              <stage.Icon className="w-9 h-9 text-white/70" strokeWidth={1.8} />
+            </span>
+          </>
+        )}
         <span className={`relative text-[10px] font-extrabold tracking-[0.1em] ${kids ? 'text-[#1E6FB0]' : 'opacity-80'}`}>
           CLASS {parseInt(stage.classSort, 10)}
           {sample.lesson && ` · ${sample.lesson.subject.toUpperCase()}`}
         </span>
         <span className="relative font-display text-[19px] leading-tight line-clamp-2">
-          Hi {stage.learner}! Ready for {sample.lesson?.chapter_name || 'your next chapter'}?
+          Hi {stage.learner}! Ready for {sample.lesson ? toDisplayTitle(sample.lesson.chapter_name) : 'your next chapter'}?
         </span>
         <span className="relative self-start mt-auto inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#FFC53D] text-[#1E2233] text-xs font-extrabold shadow-[0_3px_0_#E0A81F]">
           <Play className="w-3.5 h-3.5 fill-current" /> {kids ? "Let's go" : 'Continue lesson'}
@@ -138,10 +158,9 @@ export const StageShowcase: React.FC<{ videos: Video[] }> = ({ videos }) => {
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
     >
-      <span aria-hidden="true" className="absolute -top-6 right-0 w-52 h-52 rounded-full bg-[#FFC53D]/30 blur-2xl animate-float" />
-      <span aria-hidden="true" className="absolute -bottom-6 left-0 w-52 h-52 rounded-full bg-[#12A594]/20 blur-2xl animate-float [animation-delay:-4s]" />
+      <span aria-hidden="true" className="absolute -inset-4 -z-10 rounded-[32px] bg-gradient-to-br from-[#3B4FE0]/12 via-transparent to-[#12A594]/10 blur-2xl" />
 
-      <div role="tablist" aria-label="See the app for each age group" className="relative grid grid-cols-3 gap-1.5 p-1.5 rounded-[20px] bg-white border-[3px] border-[#EDEFF6] shadow-[0_5px_0_#EDEFF6]">
+      <div role="tablist" aria-label="See the app for each age group" className="glass-panel relative grid grid-cols-3 gap-1.5 p-1.5 rounded-[18px]">
         {STAGES.map((s, i) => {
           const active = i === index;
           return (
@@ -168,10 +187,18 @@ export const StageShowcase: React.FC<{ videos: Video[] }> = ({ videos }) => {
         })}
       </div>
 
-      <div id="stage-preview" role="tabpanel" aria-label={`${stage.label}: ${stage.name}`} className="relative">
-        <div key={stage.id} className="animate-pop-soft">
-          <StagePreview stage={stage} videos={videos} />
-        </div>
+      {/* All three previews share one grid cell, so the panel is always as tall as the tallest one.
+          Swapping only toggles visibility: the card (and the hero around it) never changes height. */}
+      <div id="stage-preview" role="tabpanel" aria-label={`${stage.label}: ${stage.name}`} className="relative grid">
+        {STAGES.map((s, i) => (
+          <div
+            key={s.id}
+            aria-hidden={i !== index || undefined}
+            className={`[grid-area:1/1] [&>*]:h-full ${i === index ? 'animate-pop-soft' : 'invisible pointer-events-none'}`}
+          >
+            <StagePreview stage={s} videos={videos} />
+          </div>
+        ))}
       </div>
     </div>
   );

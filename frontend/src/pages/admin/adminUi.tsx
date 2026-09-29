@@ -164,6 +164,37 @@ export const Modal: React.FC<{ title: string; subtitle?: string; onClose: () => 
   </div>
 );
 
+type ConfirmRequest = { message: string; confirmLabel: string; resolve: (ok: boolean) => void };
+
+/** In-app replacement for window.confirm: `if (!(await confirm('Delete…?'))) return;`, and render confirmNode. */
+export function useConfirm() {
+  const [request, setRequest] = useState<ConfirmRequest | null>(null);
+  const confirm = useCallback(
+    (message: string, confirmLabel = 'Delete') => new Promise<boolean>((resolve) => setRequest({ message, confirmLabel, resolve })),
+    []
+  );
+  const answer = (ok: boolean) => {
+    request?.resolve(ok);
+    setRequest(null);
+  };
+
+  const node = request ? (
+    <Modal title="Are you sure?" onClose={() => answer(false)}>
+      <p className="text-sm font-semibold text-[#4B5168]">{request.message}</p>
+      <div className="flex justify-end gap-2 pt-5">
+        <button type="button" onClick={() => answer(false)} className={secondaryButton} autoFocus>
+          Cancel
+        </button>
+        <button type="button" onClick={() => answer(true)} className={dangerButton}>
+          {request.confirmLabel}
+        </button>
+      </div>
+    </Modal>
+  ) : null;
+
+  return { confirm, confirmNode: node };
+}
+
 export function linesToList(text: string): string[] {
   return text
     .split('\n')

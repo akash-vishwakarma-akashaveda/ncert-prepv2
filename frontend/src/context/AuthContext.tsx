@@ -1,41 +1,34 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AuthService, BackendUser, toFrontendUser } from '../services/auth';
 import { ApiError } from '../services/api/client';
-import { isFirebaseConfigured } from '../services/firebase';
-import { FirestoreService } from '../services/firestore';
-import { DoubtsService } from '../services/content';
-import { StorageService } from '../services/storage';
-import { User, UserConsent } from '../types';
-import { NOTICE_VERSION, NoticeLang } from '../data/privacyNotice';
+import { User } from '../types';
+import { NoticeLang } from '../data/privacyNotice';
 import { nextStreak } from '../data/gamification';
-import { StatsService, bumpDemoStat } from '../services/stats';
+import { StatsService } from '../services/stats';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  isDemoUser: boolean;
   isAdmin: boolean;
   authModalOpen: boolean;
   setAuthModalOpen: (open: boolean) => void;
   // Google sign-in via Google Identity Services, or email + password (verified by email link),
-  // both backed by our own API. A local browser-only demo account is available separately (signInDemo).
+  // both backed by our own API.
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (name: string, email: string, password: string) => Promise<void>;
+  signUpWithEmail: (name: string, email: string, password: string, referralCode?: string) => Promise<void>;
   sendPasswordReset: (email: string) => Promise<void>;
   /** False only for email/password accounts that have not clicked the verification link yet. */
   emailVerified: boolean;
   resendVerification: () => Promise<void>;
   /** Re-reads verification state after the user clicks the link in their inbox. */
   refreshEmailVerified: () => Promise<boolean>;
-  // DPDP consent (recorded server-side; demo mode stores it locally)
+  // DPDP consent, recorded server-side.
   giveAdultConsent: (language: NoticeLang) => Promise<void>;
   requestParentConsent: (parentName: string, parentEmail: string, language: NoticeLang) => Promise<string>;
-  /** Demo mode only: stands in for the parent clicking "Approve". */
-  simulateParentApproval: () => Promise<void>;
-  /** Development only: local demo account, optionally as admin. */
-  signInDemo: (email?: string, name?: string, role?: 'student' | 'admin', grade?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Bumps the server-side session version, invalidating every session on every device (including this one). */
+  signOutAllDevices: () => Promise<void>;
   updateSettings: (settings: Partial<Pick<User, 'reminders_enabled' | 'reminder_frequency' | 'reminder_hour'>>) => Promise<void>;
   updateProfile: (updates: Partial<Omit<User, 'role' | 'userId'>>) => Promise<void>;
   recordStudyActivity: () => Promise<void>;
@@ -56,6 +49,7 @@ function toBackendProfileUpdate(updates: Partial<Omit<User, 'role' | 'userId'>>)
   if (updates.grade_preference !== undefined) out.classGrade = parseInt(updates.grade_preference, 10) || undefined;
   if (updates.study_goal_minutes !== undefined) out.studyGoalMinutes = updates.study_goal_minutes;
   if (updates.focus_subjects !== undefined) out.focusSubjects = updates.focus_subjects;
+  if (updates.stream !== undefined) out.stream = updates.stream ?? '';
   if (updates.last_watched_video !== undefined && updates.last_watched_video !== null) out.lastWatchedVideo = updates.last_watched_video;
   if (updates.onboarding_completed !== undefined) out.onboardingCompleted = updates.onboarding_completed;
   if (updates.streak_days !== undefined) out.streak = updates.streak_days;
@@ -74,7 +68,6 @@ function toBackendSettings(settings: Partial<Pick<User, 'reminders_enabled' | 'r
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isDemoUser, setIsDemoUser] = useState<boolean>(false);
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [emailVerified, setEmailVerified] = useState<boolean>(true);
   const [authProvider, setAuthProvider] = useState<'password' | 'google.com' | null>(null);
@@ -83,29 +76,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(toFrontendUser(backendUser));
     setEmailVerified(backendUser.emailVerified);
     setAuthProvider(backendUser.provider);
-    setIsDemoUser(false);
   };
 
-  // On load: ask the API if we have a session cookie. No session, and no backend configured for
-  // this browser at all (VITE_FIREBASE_API_KEY unset, the legacy "zero-config" signal) -> restore
-  // a local-only demo account if one was left in this browser.
+  // On load: ask the API if we have a session cookie.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const backendUser = await AuthService.me();
-        if (cancelled) return;
-        if (backendUser) {
-          applyBackendUser(backendUser);
-        } else if (!isFirebaseConfigured) {
-          const localUser = StorageService.getLocalUser();
-          if (localUser) {
-            setUser(localUser);
-            setIsDemoUser(true);
-          }
-        } else {
-          StorageService.setLocalUser(null);
-        }
+        if (!cancelled && backendUser) applyBackendUser(backendUser);
       } catch (err) {
         console.error('Error loading the current user:', err);
       } finally {
@@ -147,10 +126,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const signUpWithEmail = useCallback(async (name: string, email: string, password: string) => {
+  const signUpWithEmail = useCallback(async (name: string, email: string, password: string, referralCode?: string) => {
     setLoading(true);
     try {
-      const backendUser = await AuthService.signUpWithEmail(name.trim(), email.trim(), password);
+      const backendUser = await AuthService.signUpWithEmail(name.trim(), email.trim(), password, referralCode?.trim());
       applyBackendUser(backendUser);
       setAuthModalOpen(false);
     } finally {
@@ -173,114 +152,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return backendUser.emailVerified;
   }, []);
 
-  const saveDemoConsent = (consent: UserConsent) => {
-    setUser((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, consent };
-      StorageService.setLocalUser(next);
-      return next;
-    });
-  };
+  const giveAdultConsent = useCallback(async (language: NoticeLang) => {
+    const backendUser = await AuthService.giveAdultConsent(language);
+    applyBackendUser(backendUser);
+  }, []);
 
-  const giveAdultConsent = useCallback(
-    async (language: NoticeLang) => {
-      if (isDemoUser) {
-        saveDemoConsent({ status: 'granted', age_group: 'adult', method: 'self', notice_version: NOTICE_VERSION, language, granted_at: Date.now() });
-        return;
-      }
-      const backendUser = await AuthService.giveAdultConsent(language);
-      applyBackendUser(backendUser);
-    },
-    [isDemoUser]
-  );
-
-  const requestParentConsent = useCallback(
-    async (parentName: string, parentEmail: string, language: NoticeLang) => {
-      if (isDemoUser) {
-        saveDemoConsent({
-          status: 'pending_parent', age_group: 'child', method: 'parent', notice_version: NOTICE_VERSION, language,
-          parent_name: parentName, parent_email: parentEmail, requested_at: Date.now(),
-        });
-        return parentEmail;
-      }
-      const { parentEmail: sentTo } = await AuthService.requestParentConsent(parentName, parentEmail, language);
-      const backendUser = await AuthService.me();
-      if (backendUser) applyBackendUser(backendUser);
-      return sentTo;
-    },
-    [isDemoUser]
-  );
-
-  const simulateParentApproval = useCallback(async () => {
-    if (!isDemoUser) return;
-    setUser((prev) => {
-      if (!prev?.consent) return prev;
-      const next = { ...prev, consent: { ...prev.consent, status: 'granted' as const, granted_at: Date.now() } };
-      StorageService.setLocalUser(next);
-      return next;
-    });
-  }, [isDemoUser]);
-
-  const signInDemo = useCallback(async (
-    email = 'student@example.com',
-    name = 'Demo Student',
-    role: 'student' | 'admin' = 'student',
-    grade?: string
-  ) => {
-    setLoading(true);
-    const demoId = 'demo-user-' + Math.random().toString(36).substring(2, 9);
-    const demoUser = await FirestoreService.createOrGetUser(demoId, email, name, null);
-    demoUser.role = role;
-    if (grade) demoUser.grade_preference = grade;
-    if (role === 'admin') demoUser.onboarding_completed = true;
-    else bumpDemoStat('registrations');
-    StorageService.setLocalUser(demoUser);
-    setUser(demoUser);
-    setIsDemoUser(true);
-    setAuthModalOpen(false);
-    setLoading(false);
+  const requestParentConsent = useCallback(async (parentName: string, parentEmail: string, language: NoticeLang) => {
+    const { parentEmail: sentTo } = await AuthService.requestParentConsent(parentName, parentEmail, language);
+    const backendUser = await AuthService.me();
+    if (backendUser) applyBackendUser(backendUser);
+    return sentTo;
   }, []);
 
   const signOut = useCallback(async () => {
     setLoading(true);
-    if (!isDemoUser) {
-      try {
-        await AuthService.signOut();
-      } catch (err) {
-        console.warn('Sign out error:', err);
-      }
+    try {
+      await AuthService.signOut();
+    } catch (err) {
+      console.warn('Sign out error:', err);
     }
-    if (user) StorageService.setLocalUser(null);
     setUser(null);
-    setIsDemoUser(false);
     setAuthProvider(null);
     setLoading(false);
-  }, [user, isDemoUser]);
+  }, []);
+
+  const signOutAllDevices = useCallback(async () => {
+    setLoading(true);
+    try {
+      await AuthService.signOutAllDevices();
+    } catch (err) {
+      console.warn('Sign out all devices error:', err);
+    }
+    setUser(null);
+    setAuthProvider(null);
+    setLoading(false);
+  }, []);
 
   const updateSettings = useCallback(
     async (settings: Partial<Pick<User, 'reminders_enabled' | 'reminder_frequency' | 'reminder_hour'>>) => {
       if (!user) return;
-      if (isDemoUser) {
-        setUser((prev) => (prev ? { ...prev, ...settings } : null));
-        return;
-      }
       const backendUser = await AuthService.updateSettings(toBackendSettings(settings));
       applyBackendUser(backendUser);
     },
-    [user, isDemoUser]
+    [user]
   );
 
   const updateProfile = useCallback(
     async (updates: Partial<Omit<User, 'role' | 'userId'>>) => {
       if (!user) return;
-      if (isDemoUser) {
-        setUser((prev) => (prev ? { ...prev, ...updates } : null));
-        return;
-      }
       const backendUser = await AuthService.updateProfile(toBackendProfileUpdate(updates));
       applyBackendUser(backendUser);
     },
-    [user, isDemoUser]
+    [user]
   );
 
   const recordStudyActivity = useCallback(async () => {
@@ -293,27 +216,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Throws Error('requires-recent-login') when the server wants a fresh sign-in first.
   const deleteAccount = useCallback(async () => {
     if (!user) return;
-    const uid = user.userId;
-
-    if (isDemoUser) {
-      await FirestoreService.deleteUserAccount(uid);
-      DoubtsService.removeLocalForUser(uid);
-    } else {
-      try {
-        await AuthService.deleteAccount();
-      } catch (err) {
-        if (err instanceof ApiError && err.message === 'requires-recent-login') throw new Error('requires-recent-login');
-        throw new Error('We could not finish deleting your account. Please try again; if it keeps failing, contact privacy support.');
-      }
+    try {
+      await AuthService.deleteAccount();
+    } catch (err) {
+      if (err instanceof ApiError && err.message === 'requires-recent-login') throw new Error('requires-recent-login');
+      throw new Error('We could not finish deleting your account. Please try again; if it keeps failing, contact privacy support.');
     }
-
-    StorageService.clearUserData(uid);
     setUser(null);
-    setIsDemoUser(false);
     setAuthProvider(null);
-  }, [user, isDemoUser]);
-
-  const reauthProviderId = isDemoUser ? null : authProvider;
+  }, [user]);
 
   const reauthenticate = useCallback(
     async (password?: string) => {
@@ -337,7 +248,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         loading,
-        isDemoUser,
         isAdmin,
         authModalOpen,
         setAuthModalOpen,
@@ -350,14 +260,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshEmailVerified,
         giveAdultConsent,
         requestParentConsent,
-        simulateParentApproval,
-        signInDemo,
         signOut,
+        signOutAllDevices,
         updateSettings,
         updateProfile,
         recordStudyActivity,
         deleteAccount,
-        reauthProviderId,
+        reauthProviderId: authProvider,
         reauthenticate,
       }}
     >

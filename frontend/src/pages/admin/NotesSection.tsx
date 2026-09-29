@@ -14,6 +14,7 @@ import {
   linesToList,
   primaryButton,
   secondaryButton,
+  useConfirm,
 } from './adminUi';
 
 interface NotesSectionProps {
@@ -52,6 +53,7 @@ type StatusFilter = 'all' | 'published' | 'draft' | 'none';
 
 export const NotesSection: React.FC<NotesSectionProps> = ({ tree, notes, reloadNotes, notify, adminName, initialKey }) => {
   const notesByKey = useMemo(() => new Map(notes.map((n) => [n.id, n])), [notes]);
+  const { confirm, confirmNode } = useConfirm();
   const allChapters = useMemo(
     () => tree.flatMap((c) => c.subjects.flatMap((s) => s.chapters.map((ch) => ({ ...ch, classActive: c.isActive, subjectActive: s.isActive })))),
     [tree]
@@ -96,9 +98,9 @@ export const NotesSection: React.FC<NotesSectionProps> = ({ tree, notes, reloadN
     return !q || `${ch.chapter_id} ${ch.chapter_name}`.toLowerCase().includes(q);
   });
 
-  const selectChapter = (key: string) => {
+  const selectChapter = async (key: string) => {
     if (key === selectedKey) return;
-    if (dirty && !window.confirm('You have unsaved changes to these notes. Discard them?')) return;
+    if (dirty && !(await confirm('You have unsaved changes to these notes. Discard them?', 'Discard'))) return;
     setSelectedKey(key);
   };
 
@@ -176,7 +178,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({ tree, notes, reloadN
   };
 
   const removeAttachment = async (attachment: NoteAttachment) => {
-    if (!window.confirm(`Remove "${attachment.name}"? Students will no longer be able to open it.`)) return;
+    if (!(await confirm(`Remove "${attachment.name}"? Students will no longer be able to open it.`, 'Remove'))) return;
     try {
       await NotesService.deleteAttachment(attachment);
     } catch (err) {
@@ -191,7 +193,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({ tree, notes, reloadN
   };
 
   const deleteNotes = async () => {
-    if (!saved || !window.confirm('Delete these notes and all attached files? This cannot be undone.')) return;
+    if (!saved || !(await confirm('Delete these notes and all attached files? This cannot be undone.'))) return;
     setSaving(true);
     try {
       await NotesService.remove(saved);
@@ -464,6 +466,7 @@ export const NotesSection: React.FC<NotesSectionProps> = ({ tree, notes, reloadN
           previewNotes={buildNotes(selected, form, published)}
         />
       )}
+      {confirmNode}
     </div>
   );
 };

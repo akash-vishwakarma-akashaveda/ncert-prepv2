@@ -3,6 +3,7 @@ import { Shield } from 'lucide-react';
 import { Breadcrumbs } from '../components/navigation/Breadcrumbs';
 import { NoticeView } from '../components/consent/ConsentGate';
 import { GRIEVANCE, NOTICE_VERSION, NoticeLang } from '../data/privacyNotice';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 interface PrivacyPageProps {
   onNavigateHome: () => void;
@@ -15,7 +16,7 @@ const MORE: [string, string][] = [
   ],
   [
     'Sign-in',
-    'You can sign in with Google or with an email address and password (Firebase Authentication). We never see your Google password. Email accounts must verify their address.',
+    'You can sign in with Google or with an email address and password. We never see your Google password. Email accounts must verify their address.',
   ],
   [
     'Children',
@@ -28,13 +29,14 @@ const MORE: [string, string][] = [
   ['Reminder emails', 'Off unless you turn them on. Every email has a one-click unsubscribe link.'],
   [
     'Storage and security',
-    'Data is stored in Google Firebase (Firestore) with access rules so that only you, and our teachers for your doubts, can see your data. We keep it until you withdraw consent or delete your account; it is then erased within 30 days.',
+    'Data is stored on AWS servers in Mumbai (ap-south-1) with access rules so that only you, and our teachers for your doubts, can see your data. We keep it until you withdraw consent or delete your account; it is then erased within 30 days.',
   ],
   ['Changes', 'If this notice changes in a way that needs your consent again, we will ask you the next time you sign in.'],
 ];
 
 export const PrivacyPage: React.FC<PrivacyPageProps> = ({ onNavigateHome }) => {
   const [lang, setLang] = useState<NoticeLang>('en');
+  useDocumentTitle('Privacy Notice — NCERT Prep');
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-16">
       <Breadcrumbs

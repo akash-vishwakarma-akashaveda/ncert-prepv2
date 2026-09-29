@@ -9,13 +9,10 @@ import {
   AlertTriangle,
   ArrowRight,
   Pin,
-  Star,
+  Heart,
   Flame,
   Trophy,
-  Zap,
-  MessageCircleQuestion,
   BookOpenCheck,
-  Heart,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useProgress } from '../../context/ProgressContext';
@@ -27,6 +24,8 @@ import { LeaderboardService } from '../../services/leaderboard';
 import { LeaderboardEntry } from '../../types';
 import { classLabel, currentStreak, streakWeek, xpStats } from '../../data/gamification';
 import { getSubjectTileStyle } from '../../data/colorTokens';
+import { getGradeStage, getStageConfig } from '../../data/stageThemes';
+import { BADGES, BadgeProgress } from '../../data/badges';
 import { useCourse } from '../useCourse';
 import { KidsScene, tintVars, useStage } from '../stage';
 import { SubjectCard } from './SubjectsPage';
@@ -80,7 +79,7 @@ export const HomePage: React.FC = () => {
     if (!user || isAdmin || !course.classSort) return;
     let active = true;
     const load = () =>
-      LeaderboardService.getClassLeaderboard(course.classSort, user, course.completedCount, totalXp).then((list) => {
+      LeaderboardService.getClassLeaderboard(course.classSort, user).then((list) => {
         if (active) setLeaderboardEntries(list);
       });
     load();
@@ -95,7 +94,7 @@ export const HomePage: React.FC = () => {
 
   if (!user) return null;
 
-  // Admins (users.role === 'admin', set only in the Firebase console) get the admin console here.
+  // Admins (users.role === 'admin', set only via the backend's seed:admin script) get the admin console here.
   if (isAdmin) {
     return (
       <Suspense fallback={<p className="py-12 text-center text-sm font-semibold text-[#6B7280]">Loading admin console…</p>}>
@@ -147,44 +146,62 @@ export const HomePage: React.FC = () => {
 
   const myRankIndex = leaderboardEntries.findIndex((e) => e.userId === user?.userId);
   const myRank = myRankIndex >= 0 ? myRankIndex + 1 : null;
-  const ann = config?.announcement;
-  const showAnn = Boolean(
-    ann?.isActive &&
+  const activeAnns = (config?.announcements || []).filter(
+    (ann) =>
+      ann.isActive &&
       (ann.targetClass === 'all' || ann.targetClass === course.classSort || parseInt(ann.targetClass.replace(/\D/g, ''), 10) === classInt)
   );
   const spotlight = config?.spotlights?.[course.classSort] || config?.spotlights?.[String(classInt)];
-  const tone = ann ? TONES[ann.tone] || TONES.info : TONES.info;
   const kids = stage === 'primary';
 
-  // Badges come from real progress only, so a new account starts with none.
-  const badges = [
-    { name: 'First lesson', Icon: Star, got: course.completedCount >= 1, hint: 'Finish any lesson' },
-    { name: '3-day streak', Icon: Flame, got: streak >= 3, hint: 'Study 3 days in a row' },
-    { name: 'Curious mind', Icon: MessageCircleQuestion, got: myDoubts.length > 0, hint: 'Ask your first doubt' },
-    { name: '10 lessons', Icon: BookOpenCheck, got: course.completedCount >= 10, hint: 'Finish 10 lessons' },
-    { name: '7-day streak', Icon: Zap, got: streak >= 7, hint: 'Study 7 days in a row' },
-    { name: 'Level 5', Icon: Trophy, got: level >= 5, hint: 'Reach level 5' },
-  ];
+  // Badges come from real progress only, so a new account starts with none. Names/hints and
+  // colors follow the student's class-stage theme (see data/badges.ts, data/stageThemes.ts).
+  const badgeStage = getGradeStage(course.classSort);
+  const badgeTheme = getStageConfig(course.classSort);
+  const badgeProgress: BadgeProgress = {
+    completedCount: course.completedCount,
+    streak,
+    doubtsAsked: myDoubts.length,
+    level,
+    favorites: favoriteIds.length,
+  };
+  const badges = BADGES.map((b) => ({
+    ...b,
+    name: b.name[badgeStage],
+    hint: b.hint[badgeStage],
+    got: b.check(badgeProgress),
+  }));
   const nextBadge = badges.find((b) => !b.got);
 
   return (
     <div className="space-y-6">
-      {showAnn && ann && (
-        <section aria-label="Announcement" className={`ann-${ann.tone} rounded-[24px] border-[3px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 ${tone.box}`}>
-          <span className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${tone.icon}`}>
-            <tone.Icon className="w-5 h-5" strokeWidth={2.4} />
-          </span>
-          <div className="flex-1 min-w-0">
-            <p className={`ann-tag text-[10.5px] font-extrabold tracking-[0.1em] ${tone.tag}`}>{tone.label}</p>
-            <h2 className="text-lg leading-snug">{ann.title}</h2>
-            <p className="text-sm font-semibold opacity-80">{ann.message}</p>
-          </div>
-          {ann.actionLabel && ann.actionUrl && (
-            <Link to={ann.actionUrl} className={`${btnAccent} shrink-0`}>
-              {ann.actionLabel} <ArrowRight className="w-4 h-4" />
-            </Link>
-          )}
-        </section>
+      {activeAnns.length > 0 && (
+        <div className="space-y-3">
+          {activeAnns.map((ann) => {
+            const tone = TONES[ann.tone] || TONES.info;
+            return (
+              <section
+                key={ann.id}
+                aria-label="Announcement"
+                className={`ann-${ann.tone} rounded-[24px] border-[3px] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 ${tone.box}`}
+              >
+                <span className={`w-11 h-11 rounded-[14px] flex items-center justify-center shrink-0 ${tone.icon}`}>
+                  <tone.Icon className="w-5 h-5" strokeWidth={2.4} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className={`ann-tag text-[10.5px] font-extrabold tracking-[0.1em] ${tone.tag}`}>{tone.label}</p>
+                  <h2 className="text-lg leading-snug">{ann.title}</h2>
+                  <p className="text-sm font-semibold opacity-80">{ann.message}</p>
+                </div>
+                {ann.actionLabel && ann.actionUrl && (
+                  <Link to={ann.actionUrl} className={`${btnAccent} shrink-0`}>
+                    {ann.actionLabel} <ArrowRight className="w-4 h-4" />
+                  </Link>
+                )}
+              </section>
+            );
+          })}
+        </div>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(260px,1fr)] gap-5">
@@ -290,14 +307,15 @@ export const HomePage: React.FC = () => {
             <div className="flex items-baseline justify-between gap-3 flex-wrap">
               <h2 id="subjects-title" className="text-[21px]">Your subjects</h2>
               <span className="text-[12.5px] font-bold text-[#6B7280]">
-                {classLabel(course.classSort)} ·{' '}
+                {classLabel(course.classSort)}
+                {course.stream ? ` · ${course.stream.label}` : ''} ·{' '}
                 <Link to="/app/profile" className="text-[color:var(--brand)] hover:text-[color:var(--brand-edge)]">
-                  Change class
+                  {course.hasStreams && !course.stream ? 'Pick your stream' : 'Change class'}
                 </Link>
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-5">
-              {course.subjects.slice(0, 8).map((s) => (
+              {course.streamSubjects.slice(0, 8).map((s) => (
                 <SubjectCard key={s.group.name} summary={s} />
               ))}
             </div>
@@ -351,13 +369,14 @@ export const HomePage: React.FC = () => {
               <div className="grid grid-cols-3 gap-3">
                 {badges.map((b) => (
                   <div
-                    key={b.name}
+                    key={b.id}
                     title={b.got ? b.name : b.hint}
                     className={`aspect-square rounded-[20px] border-[3px] flex flex-col items-center justify-center gap-1 p-1 ${
-                      b.got ? 'bg-white border-[#FFC53D]' : 'bg-[#FFF0D8] border-[#E6D3AE] opacity-45'
+                      b.got ? 'bg-white' : 'bg-[#FFF0D8] border-[#E6D3AE] opacity-45'
                     }`}
+                    style={b.got ? { borderColor: badgeTheme.primaryColor } : undefined}
                   >
-                    <b.Icon className={`w-5 h-5 ${b.got ? 'text-[#E0A81F]' : 'text-[#C9A55A]'}`} strokeWidth={2.4} />
+                    <b.Icon className="w-5 h-5" style={{ color: b.got ? badgeTheme.primaryColor : '#C9A55A' }} strokeWidth={2.4} />
                     <span className="text-[9px] sm:text-[10px] font-extrabold text-[#6B7280] text-center leading-tight">{b.name}</span>
                   </div>
                 ))}

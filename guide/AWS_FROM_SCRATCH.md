@@ -20,6 +20,9 @@ This assumes you have never used AWS before. Every step says exactly what to cli
 | **Security group / firewall** | A list of rules like "allow connections on port 443 from anywhere." Every AWS resource that talks over the network has one. |
 | **SSH** | How you type commands into a remote computer. Lightsail gives you this in your browser — no extra software. |
 | **Domain name** | `yoursite.com`. Optional — you can launch on a raw IP address first and add this later. |
+| **S3** | AWS's file storage service — buckets holding files (PDFs, images) that get their own web link. Used here for note attachments. |
+| **SES** | AWS's email-sending service. Starts in a restricted "sandbox" mode until you request production access. |
+| **IAM policy / access key** | A policy is a list of exactly what an identity is allowed to do (e.g. "upload to this one S3 bucket"). An access key is the username/password-like credential a *program* (not a person) uses to prove it holds that policy. |
 
 ---
 
@@ -232,9 +235,11 @@ nano .env
 ```
 Set at minimum:
 ```
-VITE_API_URL=http://<static-ip>/api
+VITE_API_URL=http://<static-ip>
 ```
-(The Firebase keys are still needed for now — video catalogue and a few other features are still Firebase-backed until their own migration phase; copy those values from your local `.env`.)
+No `/api` suffix — every call in the frontend already includes `/api/...` in its path (see `services/api/client.ts`), so adding it here doubles it into `/api/api/...` and every request 404s.
+
+Copy every other value straight from your local `frontend/.env` — the real Firebase keys included. Leaving them as the `.env.example` placeholders builds successfully (the production guard only checks the key is *present*, not valid) but silently breaks the video catalogue and everything else still Firebase-backed, since Firebase will reject the fake key at runtime instead of at build time.
 
 ```bash
 npm run build
@@ -273,6 +278,15 @@ server {
 
     location / {
         try_files $uri $uri/ /index.html;
+        # Security headers for the site pages (the API sets its own via helmet).
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
+        # Report-only until the browser console shows no violations on every page, then rename to Content-Security-Policy.
+        # Replace YOUR-BUCKET with S3_NOTES_BUCKET.
+        add_header Content-Security-Policy-Report-Only "default-src 'self'; script-src 'self' https://accounts.google.com https://www.youtube.com; frame-src 'self' https://www.youtube-nocookie.com https://www.youtube.com https://accounts.google.com; img-src 'self' data: blob: https://i.ytimg.com https://lh3.googleusercontent.com https://YOUR-BUCKET.s3.ap-south-1.amazonaws.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss://yourdomain.com https://YOUR-BUCKET.s3.ap-south-1.amazonaws.com https://accounts.google.com https://www.googleapis.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'" always;
     }
 }
 ```
@@ -310,9 +324,120 @@ Google Cloud Console → [Credentials](https://console.cloud.google.com/apis/cre
 
 ---
 
-## Phase 10 — Real email (optional — the app works fine without this at first)
+## Phase 10 — S3 for note attachments (optional — only needed for the admin "upload a PDF/image" feature)
 
-Without this, verification/reset/consent emails just get logged on the server instead of sent (harmless for early testing, not fine for real users). See `guide/AWS_DEPLOYMENT.md` §9 for the full SES domain-verification walkthrough once you have a domain from Phase 8.
+Everything else in the app works without this. This is the one feature that needs real file storage instead of just a database row.
+
+### 10.1 Create the bucket
+1. Console search bar → **S3** → **Create bucket**.
+2. **Bucket name**: must be globally unique across *all* of AWS, not just your account — e.g. `ncert-prep-notes-<something-random>`. Note it down exactly; you'll need it twice more below.
+3. **AWS Region**: `ap-south-1`.
+4. **Object Ownership**: leave **ACLs disabled (recommended)** — we'll grant public read through a bucket policy instead, which is the modern, more precise way to do it.
+5. **Block Public Access settings**: **uncheck** "Block all public access". This doesn't make the bucket public by itself — the policy in the next step decides exactly what's public (just the `notes/` folder), this toggle just stops AWS from refusing that policy.
+6. Leave everything else default → **Create bucket**.
+
+### 10.2 Allow public read on just the notes folder
+1. Click into your new bucket → **Permissions** tab → scroll to **Bucket policy** → **Edit**.
+2. Paste this, replacing `YOUR-BUCKET-NAME` with your actual bucket name:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadNotes",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/notes/*"
+    }
+  ]
+}
+```
+3. **Save changes.** Only files under `notes/` are readable by anyone with the link (matching how the note attachments worked before) — nothing else in the bucket is exposed.
+
+### 10.3 Allow the browser to upload (CORS)
+The admin's browser uploads files straight to S3 (a pre-signed PUT), so the bucket must accept requests from the site's origin — without this every upload fails with a bare "Upload failed".
+1. Same bucket → **Permissions** tab → **Cross-origin resource sharing (CORS)** → **Edit**.
+2. Paste this (use your real site origin):
+```json
+[
+  {
+    "AllowedOrigins": ["https://ncert-prep.akashaveda.com"],
+    "AllowedMethods": ["PUT", "GET"],
+    "AllowedHeaders": ["*"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+3. **Save changes.**
+
+---
+
+## Phase 11 — Amazon SES for real email (optional — without this, emails just get logged instead of sent)
+
+Verification links, password resets, and DPDP parental-consent emails currently just print to the server log (`pm2 logs`) instead of actually sending. Fine for early testing, not fine for real users. Needs the domain from Phase 8.
+
+1. Console search bar → **SES** (Simple Email Service) → confirm the region selector (top right) says **ap-south-1**.
+2. Left sidebar → **Verified identities** → **Create identity**.
+3. Choose **Domain**, enter your domain (e.g. `akashaveda.com`, or a subdomain like `mail.akashaveda.com` if you'd rather keep it separate) → **Create identity**.
+4. AWS shows you 3 **DKIM CNAME records**. Add all 3 at your DNS provider (the same place you added the `A` record in Phase 8). Verification usually completes within a few minutes, sometimes up to a day.
+5. Once the identity shows **Verified**, SES can send — but only in the **sandbox**, which limits you to sending *to* addresses you've also verified. To send to real students, you need to leave the sandbox:
+   - Left sidebar → **Account dashboard** → **Request production access**.
+   - Mail type: **Transactional**. Website URL: your domain. Use case description: *"Transactional emails for an education platform — email verification, password reset, and DPDP parental-consent requests, with one-click unsubscribe on reminder emails."*
+   - Submit. Usually approved within a day; you'll get an email.
+6. While waiting (or for quick testing), you can verify your own personal email as a recipient: **Verified identities** → **Create identity** → **Email address** → check your inbox for the confirmation link.
+
+---
+
+## Phase 12 — One IAM user for S3 and SES
+
+Lightsail instances don't get the automatic AWS permissions ("IAM roles") that EC2 instances can — so the app needs a real access key and secret to call S3 and SES. This creates one, scoped to only what it needs.
+
+1. Console search bar → **IAM** → **Users** → **Create user**.
+2. Name it `ncert-prep-app`. Do **not** check "Provide user access to the AWS Management Console" — this user is for the app to use programmatically, not for a person to log in with.
+3. **Attach policies directly** → **Create policy** (opens in a new tab).
+4. Switch to the **JSON** tab and paste (replace `YOUR-BUCKET-NAME` with the bucket from Phase 10):
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "NotesBucketAccess",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:DeleteObject"],
+      "Resource": "arn:aws:s3:::YOUR-BUCKET-NAME/notes/*"
+    },
+    {
+      "Sid": "SendEmail",
+      "Effect": "Allow",
+      "Action": ["ses:SendEmail", "ses:SendRawEmail"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+5. Name the policy `ncert-prep-s3-ses` → **Create policy**. Back in the user-creation tab, refresh the policy list, check the new policy, and finish creating the user.
+6. Click into the new user → **Security credentials** tab → **Create access key** → choose **Application running outside AWS** → **Create access key**.
+7. Copy both the **Access key ID** and **Secret access key** immediately — the secret is shown exactly once.
+
+### 12.1 Wire it into the backend
+On the Lightsail instance:
+```bash
+cd /var/www/prep-ncert/prep_ncert/backend
+nano .env
+```
+Add:
+```
+S3_NOTES_BUCKET=your-bucket-name
+AWS_ACCESS_KEY_ID=paste-the-access-key-id
+AWS_SECRET_ACCESS_KEY=paste-the-secret-access-key
+SES_FROM_EMAIL=NCERT Prep <noreply@yourdomain.com>
+```
+(`AWS_REGION=ap-south-1` should already be there from Phase 6.) Save, then:
+```bash
+pm2 restart prep-ncert-api
+```
+Note uploads and real emails both start working the moment this is set — no rebuild needed, since these are read at runtime, not build time.
 
 ---
 
@@ -337,10 +462,17 @@ Without this, verification/reset/consent emails just get logged on the server in
 | Backend won't start, mentions `DATABASE_URL` | Check the password/endpoint in `backend/.env`, and that the RDS security group (2.1) allows the Lightsail static IP |
 | `nginx -t` fails | Typo in `/etc/nginx/sites-available/prep-ncert` — re-check braces and semicolons |
 | Google sign-in: "no registered origin" | You skipped Phase 9, or the origin doesn't exactly match (`http` vs `https`, trailing slash) |
-| Emails not arriving | Expected until Phase 10 — check `pm2 logs prep-ncert-api` for the logged email content instead |
+| Emails not arriving | Expected until Phase 11 is fully done (domain verified *and* out of the SES sandbox) — check `pm2 logs prep-ncert-api` for the logged email content instead |
+| Note upload fails with "File storage is not configured yet" | `S3_NOTES_BUCKET` isn't set in `backend/.env` yet — finish Phase 10 and 12 |
+| Note upload fails with just "Upload failed" (no status code) | The bucket's CORS rule (10.3) is missing or its origin doesn't exactly match the site URL |
+| Note upload fails with `403 Forbidden` from S3 | The IAM user's policy (Phase 12) doesn't match your actual bucket name, or the access key in `.env` is wrong/truncated |
+| Uploaded note file gives `403` when a student opens it | The bucket policy (10.2) has the wrong bucket name, or the file wasn't uploaded under the `notes/` prefix |
+| SES: "Email address is not verified" | You're still in the SES sandbox (5) and haven't verified that specific recipient, or production access hasn't been approved yet |
 
 ---
 
 ## What this costs
 
-With Lightsail's $10–12/month plan + a `db.t3.micro` RDS instance (~$15/month) + trivial data transfer, expect roughly **$25–30/month** before any credits are applied — check the exact current numbers in Billing → **Budgets** (Phase 1.3) so you're never surprised. This is well within typical credit grants for a year or more at low-to-moderate traffic.
+With Lightsail's $10–12/month plan + a `db.t3.micro` RDS instance (~$15/month) + trivial data transfer, expect roughly **$25–30/month** before any credits are applied. S3 and SES are both pay-per-use and effectively free at this app's scale (a few cents/month for storage, $0.10 per 1,000 emails) — check the exact current numbers in Billing → **Budgets** (Phase 1.3) so you're never surprised. This is well within typical credit grants for a year or more at low-to-moderate traffic.
+
+**No other AWS services are needed** for anything currently built. Two you might add later, not required now: **CloudWatch** alarms (email you if the server or database has a problem) and **Route 53** (only useful if you want AWS itself to manage your domain's DNS instead of your current registrar).

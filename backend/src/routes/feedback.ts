@@ -1,15 +1,28 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
+import type { Server } from 'socket.io';
 import { prisma } from '../db.js';
 import { requireAuth, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 router.use(requireAuth);
 
-const submitSchema = z.object({ rating: z.number().int().min(1).max(5), comment: z.string().max(2000).optional() });
+function toPublicFeedback(f: { id: string; userId: string; youtubeId: string; message: string; status: string; createdAt: Date; user?: { displayName: string | null; email: string } }) {
+  return {
+    feedbackId: f.id,
+    userId: f.userId,
+    userEmail: f.user?.email,
+    youtube_id: f.youtubeId,
+    message: f.message,
+    status: f.status.toLowerCase(),
+    created_at: f.createdAt.getTime(),
+  };
+}
 
-// Max 5 submissions/hour per user, matching NFR-3 in the product spec.
+const submitSchema = z.object({ youtubeId: z.string().min(1), message: z.string().min(1).max(1000) });
+
+// Max 5 submissions/hour per user.
 const submitLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 5,
@@ -21,8 +34,11 @@ const submitLimiter = rateLimit({
 router.post('/', submitLimiter, async (req, res) => {
   const parsed = submitSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-  const feedback = await prisma.feedback.create({ data: { userId: req.user!.userId, ...parsed.data } });
-  res.status(201).json(feedback);
+  const feedback = await prisma.feedback.create({
+    data: { userId: req.user!.userId, youtubeId: parsed.data.youtubeId, message: parsed.data.message.trim() },
+  });
+  (req.app.get('io') as Server | undefined)?.to('admins').emit('feedback:changed');
+  res.status(201).json(toPublicFeedback(feedback));
 });
 
 router.get('/', requireAdmin, async (req, res) => {
@@ -32,12 +48,14 @@ router.get('/', requireAdmin, async (req, res) => {
     orderBy: { createdAt: 'desc' },
     include: { user: { select: { displayName: true, email: true } } },
   });
-  res.json(rows);
+  res.json(rows.map(toPublicFeedback));
 });
 
-router.post('/:id/review', requireAdmin, async (req, res) => {
-  const feedback = await prisma.feedback.update({ where: { id: req.params.id }, data: { status: 'REVIEWED' } });
-  res.json(feedback);
+router.patch('/:id', requireAdmin, async (req, res) => {
+  const status = req.body?.status === 'new' ? 'NEW' : 'REVIEWED';
+  const feedback = await prisma.feedback.update({ where: { id: req.params.id }, data: { status } });
+  (req.app.get('io') as Server | undefined)?.to('admins').emit('feedback:changed');
+  res.json(toPublicFeedback(feedback));
 });
 
 export default router;

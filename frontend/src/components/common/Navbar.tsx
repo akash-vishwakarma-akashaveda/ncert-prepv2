@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, LogIn, LayoutDashboard, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { Logo as BrandLogo } from './Logo';
 
-type NavTab = 'home' | 'browse' | 'privacy' | 'profile';
+type NavTab = 'home' | 'browse' | 'demo' | 'privacy' | 'profile';
 
 interface NavbarProps {
   currentTab: NavTab;
@@ -11,6 +11,35 @@ interface NavbarProps {
   onOpenSearch: () => void;
   // Home has its own hero search, so the bar is hidden there to keep one search per screen.
   showSearch?: boolean;
+}
+
+// Same order as the sections appear on the landing page.
+const SECTIONS: [id: string, label: string][] = [
+  ['grows', 'For every age'],
+  ['features', 'Features'],
+  ['visual-grid', 'Classes'],
+  ['how-it-works', 'How it works'],
+];
+
+/** Which landing section is under the middle band of the screen (null over the hero or off the landing page). */
+function useActiveSection(enabled: boolean): string | null {
+  const [active, setActive] = useState<string | null>(null);
+  useEffect(() => {
+    setActive(null);
+    if (!enabled || !('IntersectionObserver' in window)) return;
+    const els = SECTIONS.map(([id]) => document.getElementById(id)).filter((el): el is HTMLElement => Boolean(el));
+    const visible = new Set<string>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => (e.isIntersecting ? visible.add(e.target.id) : visible.delete(e.target.id)));
+        setActive(SECTIONS.find(([id]) => visible.has(id))?.[0] ?? null);
+      },
+      { rootMargin: '-45% 0px -50% 0px' }
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [enabled]);
+  return active;
 }
 
 const Logo: React.FC<{ onClick: () => void }> = ({ onClick }) => (
@@ -33,9 +62,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), currentTab === 'home' ? 0 : 150);
   };
 
+  const activeSection = useActiveSection(currentTab === 'home');
+
   const linkClass = (active: boolean) =>
-    `px-3 py-2 rounded-[14px] text-sm font-semibold transition-colors cursor-pointer ${
-      active ? 'text-[color:var(--brand)] bg-[color:var(--brand-soft)]' : 'text-[#4B5168] hover:bg-[color:var(--page)]'
+    `px-3.5 py-2 rounded-[14px] text-sm font-bold border-2 transition-all duration-200 cursor-pointer ${
+      active
+        ? 'text-[color:var(--brand)] bg-[color:var(--brand-soft)] border-[color:var(--brand-line)] shadow-[0_3px_0_var(--brand-line)] -translate-y-px'
+        : 'text-[#4B5168] border-transparent hover:bg-[#FFF6E2] hover:text-[#1E2233]'
     }`;
 
   return (
@@ -44,19 +77,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         <Logo onClick={() => onNavigate('home')} />
 
         <nav aria-label="Main" className="hidden md:flex items-center gap-1">
-          <button onClick={() => goToSection('visual-grid')} className={linkClass(false)}>
-            Classes
-          </button>
-          <button onClick={() => goToSection('features')} className={linkClass(false)}>
-            Features
-          </button>
-          <button onClick={() => goToSection('how-it-works')} className={linkClass(false)}>
-            How it works
-          </button>
-          <button onClick={() => goToSection('grows')} className={linkClass(false)}>
-            For every age
-          </button>
-          <button onClick={() => onNavigate('browse')} className={linkClass(currentTab === 'browse')}>
+          {SECTIONS.map(([id, label]) => (
+            <button key={id} onClick={() => goToSection(id)} aria-current={activeSection === id ? 'true' : undefined} className={linkClass(activeSection === id)}>
+              {label}
+            </button>
+          ))}
+          <button onClick={() => onNavigate('demo')} aria-current={currentTab === 'demo' ? 'page' : undefined} className={linkClass(currentTab === 'demo')}>
             Try demo
           </button>
         </nav>

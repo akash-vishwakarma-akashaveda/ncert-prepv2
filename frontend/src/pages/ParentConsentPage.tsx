@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { httpsCallable } from 'firebase/functions';
 import { AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
-import { functions, isFirebaseConfigured } from '../services/firebase';
+import { api } from '../services/api/client';
 import { useAuth } from '../context/AuthContext';
 import { NoticeView } from '../components/consent/ConsentGate';
 import { NoticeLang } from '../data/privacyNotice';
+import { useConfirm } from './admin/adminUi';
 
 interface RequestInfo {
   childName: string;
@@ -35,28 +35,28 @@ export const ParentConsentPage: React.FC = () => {
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, confirmNode } = useConfirm();
 
   useEffect(() => {
-    if (!isFirebaseConfigured || !functions) return;
-    httpsCallable<{ token: string }, RequestInfo>(functions, 'getParentalConsentRequest')({ token })
-      .then((r) => setReq(r.data))
+    api
+      .get<RequestInfo>(`/api/consent/${encodeURIComponent(token)}`)
+      .then(setReq)
       .catch((err) => setError((err as Error).message || 'This link is not valid.'));
   }, [token]);
 
   const decide = async (decision: 'approve' | 'refuse') => {
-    if (decision === 'refuse' && !window.confirm(`Refuse and delete ${req?.childName}'s account and data?`)) return;
+    if (decision === 'refuse' && !(await confirm(`Refuse and delete ${req?.childName}'s account and data?`, 'Refuse and delete'))) return;
     setBusy(true);
     setError(null);
     try {
       if (!emailVerified && !(await refreshEmailVerified())) throw new Error('Verify your email address first (check your inbox), then try again.');
-      const res = await httpsCallable<unknown, { status: RequestInfo['status'] }>(functions!, 'decideParentalConsent')({
-        token,
+      const res = await api.post<{ status: RequestInfo['status'] }>(`/api/consent/${encodeURIComponent(token)}/decide`, {
         decision,
         declaredGuardian: guardian,
         agreed,
         language: lang,
       });
-      setReq((r) => (r ? { ...r, status: res.data.status } : r));
+      setReq((r) => (r ? { ...r, status: res.status } : r));
     } catch (err) {
       setError((err as Error).message || 'Something went wrong. Please try again.');
     } finally {
@@ -65,17 +65,6 @@ export const ParentConsentPage: React.FC = () => {
   };
 
   const box = 'max-w-[720px] mx-auto my-6 sm:my-10 bg-white rounded-[32px] border-[3px] border-[#EDEFF6] shadow-[0_8px_0_#E3E5EC] p-6 sm:p-8 space-y-5';
-
-  if (!isFirebaseConfigured) {
-    return (
-      <div className={box}>
-        <h1 className="text-[26px]">Parent approval</h1>
-        <p className="text-sm font-semibold text-[#6B7280]">
-          Development mode has no email. Approve from the child's "Waiting for your parent" screen with the demo button.
-        </p>
-      </div>
-    );
-  }
 
   const done = req && req.status !== 'pending' ? DONE[req.status] : null;
 
@@ -160,6 +149,7 @@ export const ParentConsentPage: React.FC = () => {
         </>
       )}
       {!req && !error && <div className="h-40 rounded-[22px] skeleton-shimmer" aria-label="Loading" />}
+      {confirmNode}
     </div>
   );
 };

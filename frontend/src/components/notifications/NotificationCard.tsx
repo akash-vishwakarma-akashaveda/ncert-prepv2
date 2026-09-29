@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bell,
@@ -14,12 +14,16 @@ import {
   ArrowRight,
   MessageSquare,
   ChevronRight,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useDoubts } from '../../context/DoubtsContext';
 import { useDashboardConfig } from '../../hooks/useDashboardConfig';
 import { currentStreak } from '../../data/gamification';
 import { Mascot, useStage } from '../../student/stage';
+import { isSoundEnabled, setSoundEnabled } from '../../services/notificationSound';
+import { reminderSummary } from '../profile/ReminderSettingsCard';
 
 interface NotificationCardProps {
   isOpen: boolean;
@@ -55,6 +59,7 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
   const { config } = useDashboardConfig();
   const cardRef = useRef<HTMLDivElement>(null);
   const stage = useStage();
+  const [soundOn, setSoundOn] = useState(isSoundEnabled());
 
   // Close on Escape or outside click
   useEffect(() => {
@@ -147,16 +152,17 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
     });
   }
 
-  // 3. Class Announcement Notification
-  const ann = config?.announcement;
+  // 3. Class Announcement Notifications (students only: educators write them, they don't receive them)
   const userClass = user?.grade_preference || '';
-  const isTargetClass =
-    ann?.isActive &&
-    (ann.targetClass === 'all' ||
-      ann.targetClass === userClass ||
-      (userClass && parseInt(userClass.replace(/\D/g, ''), 10) === parseInt(ann.targetClass.replace(/\D/g, ''), 10)));
+  const targetedAnns = (isAdmin ? [] : config?.announcements || []).filter(
+    (ann) =>
+      ann.isActive &&
+      (ann.targetClass === 'all' ||
+        ann.targetClass === userClass ||
+        (userClass && parseInt(userClass.replace(/\D/g, ''), 10) === parseInt(ann.targetClass.replace(/\D/g, ''), 10)))
+  );
 
-  if (isTargetClass && ann) {
+  targetedAnns.forEach((ann) => {
     const toneIcon =
       ann.tone === 'exam'
         ? Sparkles
@@ -167,7 +173,7 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
         : Megaphone;
 
     notifications.push({
-      id: `announcement_${ann.title}`,
+      id: `announcement_${ann.id}`,
       type: 'announcement',
       title: ann.title,
       message: ann.message,
@@ -179,7 +185,7 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
       iconBg: ann.tone === 'exam' ? 'bg-[#FFF0CF]' : 'bg-[#E0F1FF]',
       iconColor: ann.tone === 'exam' ? 'text-[#B87A06]' : 'text-[#1E7FCB]',
     });
-  }
+  });
 
   // 4. Streak Milestone Notification
   if (!isAdmin && streak >= 3) {
@@ -197,13 +203,13 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
     });
   }
 
-  // 5. Reminder Settings Status
-  if (user && user.reminders_enabled) {
+  // 5. Reminder Settings Status (reminders are a student feature)
+  if (!isAdmin && user?.reminders_enabled) {
     notifications.push({
       id: 'reminder_active',
       type: 'reminder',
       title: 'Study Reminder Scheduled',
-      message: `Friendly email reminders set for ${user.reminder_hour || 19}:00 IST (${user.reminder_frequency || 'weekly'}).`,
+      message: `Email reminders on: ${reminderSummary(true, user.reminder_frequency, user.reminder_hour)} IST.`,
       unread: false,
       actionUrl: '/app/reminders',
       icon: Clock,
@@ -256,6 +262,18 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              const next = !soundOn;
+              setSoundOn(next);
+              setSoundEnabled(next);
+            }}
+            title={soundOn ? 'Mute notification sound' : 'Unmute notification sound'}
+            aria-pressed={soundOn}
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-[#6B7280] hover:bg-white cursor-pointer transition-colors"
+          >
+            {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
           {unreadCount > 0 && !isAdmin && (
             <button
               onClick={handleMarkAllRead}
@@ -347,11 +365,11 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
         <button
           onClick={() => {
             onClose();
-            navigate('/app/reminders');
+            navigate(isAdmin ? '/app?tab=feedback' : '/app/reminders');
           }}
           className="hover:text-[color:var(--brand)] transition-colors flex items-center gap-1 cursor-pointer"
         >
-          <span>Reminder settings</span>
+          <span>{isAdmin ? 'Student feedback' : 'Reminder settings'}</span>
         </button>
       </div>
     </div>

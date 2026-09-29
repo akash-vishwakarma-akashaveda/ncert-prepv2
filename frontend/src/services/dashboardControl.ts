@@ -1,5 +1,4 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { api } from './api/client';
 
 export interface DashboardAnnouncement {
   id: string;
@@ -33,77 +32,62 @@ export interface ContentAccessPolicy {
 }
 
 export interface StudentDashboardConfig {
-  announcement: DashboardAnnouncement | null;
+  announcements: DashboardAnnouncement[];
   spotlights: Record<string, SpotlightLesson>; // classSort -> SpotlightLesson
   policy: ContentAccessPolicy;
 }
 
-const STORAGE_KEY = 'ncert_prep_student_dashboard_config';
-const CONFIG_DOC_PATH = 'settings/student_dashboard';
+const KEY = 'student_dashboard';
 
 // Every project starts empty: nothing is shown to students until an admin publishes it.
 const EMPTY_CONFIG: StudentDashboardConfig = {
-  announcement: null,
+  announcements: [],
   spotlights: {},
   policy: { freePreviewEnabled: true, freePreviewCount: 1, allowGuestNotes: false },
 };
 
-const DEFAULT_CONFIG = EMPTY_CONFIG;
-
-function readLocalConfig(): StudentDashboardConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const saved = JSON.parse(raw);
-      return { ...DEFAULT_CONFIG, ...saved, policy: { ...DEFAULT_CONFIG.policy, ...saved.policy } };
-    }
-  } catch (err) {
-    console.warn('Could not read dashboard config from local storage', err);
-  }
-  return DEFAULT_CONFIG;
-}
-
-function writeLocalConfig(cfg: StudentDashboardConfig) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
-    window.dispatchEvent(new CustomEvent('ncert_dashboard_config_updated', { detail: cfg }));
-  } catch (err) {
-    console.warn('Could not save dashboard config to local storage', err);
-  }
+// Older configs stored a single `announcement` slot instead of a list — fold it in so it isn't lost.
+function merge(raw: (Partial<StudentDashboardConfig> & { announcement?: DashboardAnnouncement | null }) | null | undefined): StudentDashboardConfig {
+  const announcements = raw?.announcements ?? (raw?.announcement ? [raw.announcement] : []);
+  return { ...EMPTY_CONFIG, ...raw, announcements, policy: { ...EMPTY_CONFIG.policy, ...raw?.policy } };
 }
 
 export const DashboardControlService = {
   async getConfig(): Promise<StudentDashboardConfig> {
-    const local = readLocalConfig();
-    if (!db) return local;
     try {
-      const snap = await getDoc(doc(db, CONFIG_DOC_PATH));
-      if (snap.exists()) {
-        const raw = snap.data() as StudentDashboardConfig;
-        const data = { ...EMPTY_CONFIG, ...raw, policy: { ...EMPTY_CONFIG.policy, ...raw.policy } };
-        writeLocalConfig(data);
-        return data;
-      }
+      return merge(await api.get<Partial<StudentDashboardConfig> | null>(`/api/settings/${KEY}`));
     } catch (err) {
-      // Fallback to local config when offline or without permissions
+      console.warn('Could not load dashboard config', err);
+      return EMPTY_CONFIG;
     }
-    return local;
   },
 
   async saveConfig(cfg: StudentDashboardConfig): Promise<void> {
-    writeLocalConfig(cfg);
-    if (!db) return;
     try {
-      await setDoc(doc(db, CONFIG_DOC_PATH), cfg, { merge: true });
+      await api.put(`/api/settings/${KEY}`, cfg);
     } catch (err) {
       // Surface it: the admin must not see "saved" when students will never get the change.
-      throw new Error(`Could not publish to students: ${(err as Error).message || 'Firestore write failed'}`);
+      throw new Error(`Could not publish to students: ${(err as Error).message || 'request failed'}`);
     }
   },
 
-  async setAnnouncement(announcement: DashboardAnnouncement | null): Promise<void> {
+  async createAnnouncement(input: Omit<DashboardAnnouncement, 'id' | 'createdAt'>): Promise<DashboardAnnouncement> {
     const cfg = await this.getConfig();
-    cfg.announcement = announcement;
+    const created: DashboardAnnouncement = { ...input, id: `ann-${Date.now()}`, createdAt: Date.now() };
+    cfg.announcements = [created, ...cfg.announcements];
+    await this.saveConfig(cfg);
+    return created;
+  },
+
+  async updateAnnouncement(id: string, updates: Partial<Omit<DashboardAnnouncement, 'id' | 'createdAt'>>): Promise<void> {
+    const cfg = await this.getConfig();
+    cfg.announcements = cfg.announcements.map((a) => (a.id === id ? { ...a, ...updates } : a));
+    await this.saveConfig(cfg);
+  },
+
+  async deleteAnnouncement(id: string): Promise<void> {
+    const cfg = await this.getConfig();
+    cfg.announcements = cfg.announcements.filter((a) => a.id !== id);
     await this.saveConfig(cfg);
   },
 

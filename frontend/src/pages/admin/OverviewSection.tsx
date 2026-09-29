@@ -44,7 +44,8 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   const newFeedback = feedbacks.filter((f) => f.status !== 'reviewed').length;
   const activeVideos = videos.filter((v) => v.isActive).length;
   const { config } = useDashboardConfig();
-  const liveAnn = config?.announcement?.isActive ? config.announcement : null;
+  const liveAnns = (config?.announcements || []).filter((a) => a.isActive);
+  const liveAnn = liveAnns[0] || null;
   const activeSpotlightsCount = config
     ? Object.values(config.spotlights).filter((s) => s.isActive).length
     : 0;
@@ -66,7 +67,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
         <StatCard
           label="Students"
           value={studentStats ? studentStats.total : '—'}
-          hint={studentStats ? 'Registered accounts' : 'Available with live Firebase'}
+          hint={studentStats ? 'Registered accounts' : 'Loading…'}
           tone="indigo"
         />
         <StatCard label="Active lessons" value={activeVideos} hint={`${videos.length - activeVideos} hidden`} tone="teal" onClick={() => onNavigate('videos')} />
@@ -96,10 +97,10 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
                 <Sliders className="w-3.5 h-3.5" />
               </span>
               <h3 className="text-sm font-extrabold text-[#1E2233]">Student Dashboard Live Status</h3>
-              {liveAnn ? (
+              {liveAnns.length > 0 ? (
                 <span className="inline-flex items-center gap-1 text-[11px] font-extrabold px-2 py-0.5 rounded-full bg-[#E7F7F1] text-[#0B7A67]">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Broadcast Live
+                  {liveAnns.length > 1 ? `${liveAnns.length} Broadcasts Live` : 'Broadcast Live'}
                 </span>
               ) : (
                 <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
@@ -109,7 +110,7 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
             </div>
             <p className="text-xs text-[#6B7280]">
               {liveAnn
-                ? `"${liveAnn.title}" broadcasting to ${liveAnn.targetClass === 'all' ? 'all 12 classes' : `Class ${parseInt(liveAnn.targetClass, 10)}`}.`
+                ? `"${liveAnn.title}" broadcasting to ${liveAnn.targetClass === 'all' ? 'all 12 classes' : `Class ${parseInt(liveAnn.targetClass, 10)}`}${liveAnns.length > 1 ? ` (+${liveAnns.length - 1} more)` : ''}.`
                 : 'No announcement currently pinned.'}{' '}
               {activeSpotlightsCount > 0
                 ? `${activeSpotlightsCount} teacher spotlight lessons active.`
