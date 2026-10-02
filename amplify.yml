@@ -1,0 +1,50 @@
+# AWS Amplify Hosting — builds only the Vite SPA in frontend/. The API (backend/) runs on Lightsail.
+# Console settings this file depends on:
+#   - App settings → General: "monorepo" with app root `frontend` (sets AMPLIFY_MONOREPO_APP_ROOT=frontend)
+#   - Environment variables: VITE_API_URL (required — the build stops without it), VITE_GOOGLE_CLIENT_ID,
+#     VITE_GRIEVANCE_OFFICER_NAME, VITE_GRIEVANCE_EMAIL
+#   - Rewrites and redirects: SPA fallback to /index.html (see guide/AMPLIFY_FRONTEND.md)
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - nvm install 22 && nvm use 22
+            - npm ci
+        build:
+          commands:
+            # `tsc && vite build`. Tests are not run here: test/sync.test.mjs needs a script
+            # (scripts/google-apps-script-sync.js) that is not in this repo, so it always fails.
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+    customHeaders:
+      - pattern: '**'
+        headers:
+          - key: Strict-Transport-Security
+            value: max-age=63072000; includeSubDomains; preload
+          - key: X-Content-Type-Options
+            value: nosniff
+          - key: X-Frame-Options
+            value: DENY
+          - key: Referrer-Policy
+            value: strict-origin-when-cross-origin
+          - key: Permissions-Policy
+            value: camera=(), microphone=(), geolocation=(), interest-cohort=()
+      # Hashed build files never change, so browsers may keep them for a year.
+      - pattern: '/assets/**'
+        headers:
+          - key: Cache-Control
+            value: public, max-age=31536000, immutable
+      # The HTML shell must always be fresh so a new release shows up straight away.
+      - pattern: '/index.html'
+        headers:
+          - key: Cache-Control
+            value: no-cache
