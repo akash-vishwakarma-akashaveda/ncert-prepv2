@@ -11,6 +11,18 @@ export const FOCUS_MODE_STYLE: Record<FocusMode, { label: string; ring: string; 
 };
 
 const MARGIN = 12;
+// A press that moves less than this is a tap (buttons work); more is a drag (buttons don't fire).
+const DRAG_THRESHOLD = 6;
+const POSITION_KEY = 'focus-widget-position';
+
+const savedPosition = (): { x: number; y: number } | null => {
+  try {
+    const p = JSON.parse(localStorage.getItem(POSITION_KEY) || 'null');
+    return p && Number.isFinite(p.x) && Number.isFinite(p.y) ? p : null;
+  } catch {
+    return null;
+  }
+};
 const iconBtn =
   'w-8 h-8 rounded-xl flex items-center justify-center text-[#6B7280] hover:text-[#1E2233] hover:bg-[color:var(--page)] cursor-pointer transition-colors';
 
@@ -19,8 +31,9 @@ export const FloatingPomodoroWidget: React.FC<{ timer: FocusTimer }> = ({ timer 
   const location = useLocation();
   const widgetRef = useRef<HTMLDivElement>(null);
   // null = docked bottom-right (above the phone nav); set once the student drags it.
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
-  const drag = useRef<{ dx: number; dy: number } | null>(null);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(savedPosition);
+  const drag = useRef<{ id: number; startX: number; startY: number; dx: number; dy: number; moving: boolean } | null>(null);
+  const justDragged = useRef(false);
 
   const clamp = (x: number, y: number) => {
     const el = widgetRef.current;
@@ -45,19 +58,48 @@ export const FloatingPomodoroWidget: React.FC<{ timer: FocusTimer }> = ({ timer 
 
   if (!timer.isFloating || location.pathname === '/app/focus') return null;
 
+  // The whole widget is a drag handle, buttons included: the pill is almost all buttons, so
+  // skipping them left only a few pixels to grab. Pointer capture starts only once the press has
+  // moved past the threshold, so a plain tap still reaches the button underneath.
   const onPointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return;
+    if (e.button !== 0) return;
+    // A touch drag ends without a click, so a flag left over from it must not eat this new tap.
+    justDragged.current = false;
     const rect = widgetRef.current!.getBoundingClientRect();
-    drag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top };
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { id: e.pointerId, startX: e.clientX, startY: e.clientY, dx: e.clientX - rect.left, dy: e.clientY - rect.top, moving: false };
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (drag.current) setPosition(clamp(e.clientX - drag.current.dx, e.clientY - drag.current.dy));
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    if (!d.moving) {
+      if (Math.hypot(e.clientX - d.startX, e.clientY - d.startY) < DRAG_THRESHOLD) return;
+      d.moving = true;
+      widgetRef.current?.setPointerCapture(e.pointerId);
+    }
+    setPosition(clamp(e.clientX - d.dx, e.clientY - d.dy));
   };
   const onPointerUp = () => {
+    if (drag.current?.moving) {
+      justDragged.current = true;
+      setPosition((p) => {
+        try {
+          if (p) localStorage.setItem(POSITION_KEY, JSON.stringify(p));
+        } catch {
+          /* private mode: position just isn't remembered */
+        }
+        return p;
+      });
+    }
     drag.current = null;
   };
-  const dragProps = { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp };
+  // Swallow the click that ends a drag, so dropping the widget doesn't also press a button.
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (!justDragged.current) return;
+    justDragged.current = false;
+    e.stopPropagation();
+    e.preventDefault();
+  };
+  const dragProps = { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onClickCapture };
 
   const style = FOCUS_MODE_STYLE[timer.mode];
   const progress = timer.total ? Math.min(1, Math.max(0, 1 - timer.secondsLeft / timer.total)) : 0;
@@ -103,9 +145,10 @@ export const FloatingPomodoroWidget: React.FC<{ timer: FocusTimer }> = ({ timer 
       style={placement}
       role="region"
       aria-label="Mini focus timer"
-      className={`fixed z-50 ${docked} w-[272px] select-none bg-white rounded-[22px] border-[3px] border-[color:var(--card-line)] shadow-[0_5px_0_var(--card-line),0_16px_36px_rgba(30,34,51,0.2)] overflow-hidden`}
+      {...dragProps}
+      className={`fixed z-50 ${docked} w-[272px] select-none touch-none cursor-grab active:cursor-grabbing bg-white rounded-[22px] border-[3px] border-[color:var(--card-line)] shadow-[0_5px_0_var(--card-line),0_16px_36px_rgba(30,34,51,0.2)] overflow-hidden`}
     >
-      <div {...dragProps} className="flex items-center justify-between gap-2 pl-3 pr-1.5 py-1.5 bg-[color:var(--page)] border-b-2 border-[color:var(--card-line)] touch-none cursor-grab active:cursor-grabbing">
+      <div className="flex items-center justify-between gap-2 pl-3 pr-1.5 py-1.5 bg-[color:var(--page)] border-b-2 border-[color:var(--card-line)]">
         <span className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-[0.06em]" style={{ color: style.ring }}>
           <GripHorizontal className="w-4 h-4 text-[#9AA1B4]" aria-hidden="true" />
           {style.label.toUpperCase()} · {timer.cycleStep}/4

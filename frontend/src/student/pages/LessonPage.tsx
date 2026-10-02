@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -25,6 +25,8 @@ import { COMING_SOON_NOTE, DOUBTS_COMING_SOON } from '../../data/featureFlags';
 import { FeedbackForm } from '../../components/player/FeedbackForm';
 import { LessonPlayer } from '../LessonPlayer';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
+
+const PdfViewer = lazy(() => import('../../components/textbook/PdfViewer').then((m) => ({ default: m.PdfViewer })));
 import { EmptyState, btnAccent, btnPrimary, btnSecondary, btnTeal, card, chapterNumbers, formatDuration, lessonPath, subjectPath } from '../ui';
 
 type TabId = 'overview' | 'notes' | 'doubts' | 'feedback';
@@ -38,6 +40,7 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
   const { isCompleted, isFavorited, toggleCompleted, toggleFavorite, recordVideoWatched } = useProgress();
   const [tab, setTab] = useState<TabId>('overview');
   const [celebrate, setCelebrate] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
   useEffect(() => {
     if (!celebrate) return;
     const t = setTimeout(() => setCelebrate(false), 2600);
@@ -295,9 +298,19 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
                     ))}
                   </dl>
                   {video.pdf_url && (
-                    <a href={video.pdf_url} target="_blank" rel="noopener noreferrer" className={`${btnSecondary} w-full sm:w-auto`}>
+                    <button type="button" onClick={() => setPdfOpen(true)} className={`${btnSecondary} w-full sm:w-auto cursor-pointer`}>
                       <FileText className="w-4 h-4 text-[#E0603F]" /> Read this chapter in the NCERT textbook (PDF)
-                    </a>
+                    </button>
+                  )}
+                  {pdfOpen && video.pdf_url && (
+                    <Suspense fallback={null}>
+                      <PdfViewer
+                        url={video.pdf_url}
+                        title={video.chapter_name}
+                        subtitle={[video.subject, video.textbook].filter(Boolean).join(' · ')}
+                        onClose={() => setPdfOpen(false)}
+                      />
+                    </Suspense>
                   )}
                 </div>
               )}

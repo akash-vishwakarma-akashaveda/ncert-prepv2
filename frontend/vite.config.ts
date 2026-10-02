@@ -20,6 +20,10 @@ export default defineConfig(({ mode }) => {
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
+        // The PDF.js worker ships as .mjs, which some hosts serve without a JavaScript MIME type,
+        // and browsers refuse to start a module worker from that. Every host serves .js correctly.
+        assetFileNames: (info) =>
+          info.names?.[0]?.endsWith('.mjs') ? 'assets/[name]-[hash].js' : 'assets/[name]-[hash][extname]',
         manualChunks: {
           'vendor-react': ['react', 'react-dom'],
           'vendor-utils': ['fuse.js', 'clsx', 'tailwind-merge'],

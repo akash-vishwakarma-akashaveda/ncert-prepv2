@@ -57,6 +57,11 @@ router.get('/pdf', pdfLimiter, async (req, res) => {
     return res.status(504).json({ error: 'NCERT did not respond. Try opening the PDF in a new tab.' });
   }
 
+  // 404 passes through as 404: NCERT replaced some books and the old links are gone for good. (A 502
+  // would also be replaced by Cloudflare's own error page, hiding this message from the viewer.)
+  if (upstreamRes.status === 404) {
+    return res.status(404).json({ error: 'NCERT has moved or removed this chapter PDF.' });
+  }
   if (!upstreamRes.ok && upstreamRes.status !== 206) {
     return res.status(502).json({ error: 'This chapter PDF is not available on ncert.nic.in right now.' });
   }
@@ -71,6 +76,9 @@ router.get('/pdf', pdfLimiter, async (req, res) => {
     if (value) res.setHeader(header, value);
   }
   res.setHeader('Content-Disposition', 'inline');
+  // The app (PDF.js) reads these cross-origin to fetch the file in ranges; without them it has to
+  // download the whole chapter before showing page 1.
+  res.setHeader('Access-Control-Expose-Headers', 'Accept-Ranges, Content-Range, Content-Length');
   // helmet's defaults (X-Frame-Options + CSP frame-ancestors 'self') would block the viewer whenever
   // the API is not the exact same origin as the app, e.g. localhost:5173 -> localhost:4000 in dev.
   // Safe to drop here: the response is a public NCERT PDF, not an interactive page worth clickjacking.
