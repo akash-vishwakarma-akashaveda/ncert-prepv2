@@ -89,6 +89,8 @@ const profileSchema = z.object({
   // — not always a URL, so no .url() constraint.
   photoUrl: z.string().max(500).optional(),
   phoneNumber: z.string().optional(),
+  // '' clears it.
+  city: z.string().trim().max(80).optional(),
   classGrade: z.number().int().min(1).max(12).optional(),
   studyGoalMinutes: z.number().int().min(0).optional(),
   focusSubjects: z.array(z.string()).optional(),
@@ -104,11 +106,36 @@ router.patch('/me/profile', async (req, res) => {
   const parsed = profileSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   // '' means "no stream": store it as null rather than an empty string nothing else understands.
-  const { stream, ...rest } = parsed.data;
+  const { stream, city, ...rest } = parsed.data;
   const user = await prisma.user.update({
     where: { id: req.user!.userId },
-    data: { ...rest, ...(stream !== undefined ? { stream: stream || null } : {}) },
+    data: {
+      ...rest,
+      ...(stream !== undefined ? { stream: stream || null } : {}),
+      ...(city !== undefined ? { city: city || null } : {}),
+    },
   });
+  res.json(toPublicUser(user));
+});
+
+const referralSchema = z.object({ code: z.string().trim().min(1).max(20) });
+
+/**
+ * A new account can add the code of whoever referred it, once, during setup. This covers Google sign-ups,
+ * which never see the register form's referral field.
+ */
+router.post('/me/referral', async (req, res) => {
+  const parsed = referralSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Enter a referral code' });
+  const code = parsed.data.code.toUpperCase();
+  const me = await prisma.user.findUnique({ where: { id: req.user!.userId } });
+  if (!me) return res.status(404).json({ error: 'Account not found' });
+  if (me.referredByCode) return res.status(409).json({ error: 'A referral code is already on your account' });
+  if (me.onboardingCompleted) return res.status(409).json({ error: 'Referral codes can only be added while setting up a new account' });
+  if (me.referralCode === code) return res.status(400).json({ error: 'You cannot use your own referral code' });
+  const referrer = await prisma.user.findUnique({ where: { referralCode: code }, select: { id: true } });
+  if (!referrer) return res.status(400).json({ error: 'That referral code was not found' });
+  const user = await prisma.user.update({ where: { id: me.id }, data: { referredByCode: code } });
   res.json(toPublicUser(user));
 });
 
@@ -188,6 +215,60 @@ router.post('/me/consent/parent-request', async (req, res) => {
   if (!sent) return res.status(502).json({ error: 'We could not send the email to your parent right now. Please try again later.' });
 
   res.json({ parentEmail });
+});
+
+const minorConsentSchema = z.object({
+  ageBand: z.enum(['under13', '13-17']),
+  parentName: z.string().trim().min(1).max(80),
+  parentEmail: z.string().trim().email(),
+  parentPhone: z.string().trim().regex(/^\+?[0-9][0-9\s-]{6,18}$/, 'Enter a valid phone number'),
+  agreed: z.literal(true),
+  language: z.enum(['en', 'hi']).default('en'),
+});
+
+/**
+ * Under-18 onboarding without a parent sign-up: the student gives a parent's contact details and confirms
+ * the parent agrees, and can start straight away. The parent gets a one-tap link to confirm (or refuse,
+ * which erases the account) — the emailed link is the verification; no parent account is needed.
+ */
+router.post('/me/consent/minor', async (req, res) => {
+  const parsed = minorConsentSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check the parent details' });
+  const { ageBand, parentName, parentEmail, parentPhone, language } = parsed.data;
+
+  const token = randomBytes(24).toString('base64url');
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const [user] = await prisma.$transaction([
+    prisma.user.update({
+      where: { id: req.user!.userId },
+      data: {
+        consentStatus: 'GRANTED',
+        consentAgeGroup: ageBand,
+        consentMethod: 'parent_notified',
+        consentNoticeVersion: NOTICE_VERSION,
+        consentLanguage: language,
+        consentParentName: parentName,
+        consentParentEmail: parentEmail,
+        consentParentPhone: parentPhone,
+        consentRequestedAt: new Date(),
+        consentGrantedAt: new Date(),
+      },
+    }),
+    prisma.consentRequest.create({ data: { token, userId: req.user!.userId, status: 'PENDING', expiresAt } }),
+  ]);
+
+  // Not awaited into the response: a slow or failed email must never block the student.
+  void sendEmail(parentEmail, 'Your child joined NCERT Prep — please confirm', {
+    heading: `Hello ${parentName}, your child has joined NCERT Prep`,
+    lines: [
+      'Your child signed up for NCERT Prep, a free learning app with NCERT video lessons for their class, and told us you agree.',
+      'Please confirm with one tap. You can also see what we collect, or refuse, which deletes their account and data.',
+    ],
+    action: { label: 'Confirm in one tap', url: `${process.env.FRONTEND_ORIGIN}/parent-consent?token=${token}` },
+    footnote: 'No account is needed. This link expires in 30 days.',
+  }).catch(() => undefined);
+
+  res.json(toPublicUser(user));
 });
 
 router.delete('/me', async (req, res) => {

@@ -25,10 +25,12 @@ interface AuthContextType {
   refreshEmailVerified: () => Promise<boolean>;
   // DPDP consent, recorded server-side.
   giveAdultConsent: (language: NoticeLang) => Promise<void>;
+  giveMinorConsent: (body: { ageBand: 'under13' | '13-17'; parentName: string; parentEmail: string; parentPhone: string; language: NoticeLang }) => Promise<void>;
   requestParentConsent: (parentName: string, parentEmail: string, language: NoticeLang) => Promise<string>;
   signOut: () => Promise<void>;
   /** Bumps the server-side session version, invalidating every session on every device (including this one). */
   signOutAllDevices: () => Promise<void>;
+  applyReferralCode: (code: string) => Promise<void>;
   updateSettings: (settings: Partial<Pick<User, 'reminders_enabled' | 'reminder_frequency' | 'reminder_hour'>>) => Promise<void>;
   updateProfile: (updates: Partial<Omit<User, 'role' | 'userId'>>) => Promise<void>;
   recordStudyActivity: () => Promise<void>;
@@ -46,6 +48,7 @@ function toBackendProfileUpdate(updates: Partial<Omit<User, 'role' | 'userId'>>)
   if (updates.displayName !== undefined) out.displayName = updates.displayName;
   if (updates.photoURL !== undefined) out.photoUrl = updates.photoURL;
   if (updates.phoneNumber !== undefined) out.phoneNumber = updates.phoneNumber;
+  if (updates.city !== undefined) out.city = updates.city ?? '';
   if (updates.grade_preference !== undefined) out.classGrade = parseInt(updates.grade_preference, 10) || undefined;
   if (updates.study_goal_minutes !== undefined) out.studyGoalMinutes = updates.study_goal_minutes;
   if (updates.focus_subjects !== undefined) out.focusSubjects = updates.focus_subjects;
@@ -77,6 +80,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEmailVerified(backendUser.emailVerified);
     setAuthProvider(backendUser.provider);
   };
+
+  // A saved referral link is applied once to a new account (Google sign-ups never see the referral field).
+  // Valid or not, the code is forgotten afterwards so it is never retried on every page load.
+  useEffect(() => {
+    if (!user || user.has_referrer || user.onboarding_completed) return;
+    let code: string | null = null;
+    try {
+      code = localStorage.getItem('signup_ref');
+    } catch {
+      return;
+    }
+    if (!code) return;
+    AuthService.applyReferralCode(code)
+      .then(applyBackendUser)
+      .catch((err) => console.warn('Referral code not applied:', (err as Error).message))
+      .finally(() => {
+        try {
+          localStorage.removeItem('signup_ref');
+        } catch {
+          /* ignore */
+        }
+      });
+  }, [user?.userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On load: ask the API if we have a session cookie.
   useEffect(() => {
@@ -157,6 +183,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     applyBackendUser(backendUser);
   }, []);
 
+  const giveMinorConsent = useCallback(async (body: { ageBand: 'under13' | '13-17'; parentName: string; parentEmail: string; parentPhone: string; language: NoticeLang }) => {
+    applyBackendUser(await AuthService.giveMinorConsent(body));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const requestParentConsent = useCallback(async (parentName: string, parentEmail: string, language: NoticeLang) => {
     const { parentEmail: sentTo } = await AuthService.requestParentConsent(parentName, parentEmail, language);
     const backendUser = await AuthService.me();
@@ -187,6 +217,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthProvider(null);
     setLoading(false);
   }, []);
+
+  const applyReferralCode = useCallback(async (code: string) => {
+    applyBackendUser(await AuthService.applyReferralCode(code));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateSettings = useCallback(
     async (settings: Partial<Pick<User, 'reminders_enabled' | 'reminder_frequency' | 'reminder_hour'>>) => {
@@ -259,10 +293,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resendVerification,
         refreshEmailVerified,
         giveAdultConsent,
+        giveMinorConsent,
         requestParentConsent,
         signOut,
         signOutAllDevices,
         updateSettings,
+        applyReferralCode,
         updateProfile,
         recordStudyActivity,
         deleteAccount,

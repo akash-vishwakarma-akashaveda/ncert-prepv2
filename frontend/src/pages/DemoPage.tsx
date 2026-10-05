@@ -18,7 +18,7 @@ import { ChapterListSkeleton } from '../components/common/SkeletonLoader';
 import { RevisionNotesModal } from '../components/app/RevisionNotesModal';
 import { getSubjectTileStyle } from '../data/colorTokens';
 import { getGradeStage } from '../data/stageThemes';
-import { Sticker, Wave } from './LandingPage';
+import { SectionTitle, Sticker } from './LandingPage';
 
 const WRAP = 'max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10';
 
@@ -46,7 +46,7 @@ const DemoCard: React.FC<{ video: Video; onPlay: () => void }> = ({ video, onPla
     >
       <span className="relative block aspect-video bg-[#1E2233] overflow-hidden">
         <img src={thumbnailUrl(video.youtube_id)} alt="" loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        <span className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+        <span className="absolute inset-0 bg-black/15" />
         <span className="absolute inset-0 flex items-center justify-center">
           <span className="w-14 h-14 rounded-full bg-[#FFC53D] border-[3px] border-[#E0A81F] shadow-[0_4px_0_#E0A81F] flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
             <Play className="w-6 h-6 ml-0.5 fill-[#1E2233] text-[#1E2233]" />
@@ -128,7 +128,7 @@ export const DemoPage: React.FC = () => {
 
   return (
     <div className="overflow-x-clip">
-      <section className="landing-hero relative text-white">
+      <section className="landing-hero-indigo wave-above relative text-white">
         <div className={`${WRAP} relative pt-12 sm:pt-16 pb-4 flex flex-col items-center text-center gap-5`}>
           <Sticker bg="#FFC53D" edge="#E0A81F" className="animate-fade-up text-[11.5px] tracking-[0.08em]" rotate={-3}>
             <Star className="w-3.5 h-3.5 fill-current" /> {previewOn ? 'FREE DEMO · NO SIGN-UP' : 'FREE SYLLABUS EXPLORER'}
@@ -142,9 +142,9 @@ export const DemoPage: React.FC = () => {
               </svg>
             </span>
             . Learn something{' '}
-            <span className="inline-block px-3 rounded-[18px] bg-[#12A594] border-[3px] border-[#0B7A67] shadow-[0_5px_0_#0B7A67] rotate-[-2deg]">now!</span>
+            <span className="inline-block px-3 rounded-[18px] text-white bg-[#12A594] border-[3px] border-[#0B7A67] shadow-[0_5px_0_#0B7A67] rotate-[-2deg]">now!</span>
           </h1>
-          <p className="animate-fade-up [animation-delay:160ms] text-[16px] font-semibold text-white/85 max-w-xl">
+          <p className="animate-fade-up [animation-delay:160ms] text-[16px] sm:text-[17px] font-semibold text-white/85 max-w-xl">
             {previewOn
               ? 'Start with a hand-picked lesson, or explore every class and subject below. No account, no email, just watch.'
               : 'See every class, subject and chapter below. Sign up free whenever you are ready to press play.'}
@@ -156,16 +156,13 @@ export const DemoPage: React.FC = () => {
             </span>
           </div>
         </div>
-        <Wave fill={videos?.length === 0 ? '#FFFFFF' : '#FFF8E7'} />
       </section>
 
       {/* ---------- Hand-picked lessons, one block per age look (hidden when there are none to offer) ---------- */}
       {videos?.length !== 0 && (
-      <section aria-labelledby="picks-title" className="bg-[#FFF8E7]">
-        <div className={`${WRAP} pt-4 pb-14 sm:pb-20 space-y-8`}>
-          <h2 id="picks-title" className="text-center text-[28px] sm:text-[36px] text-[#1E2233]">
-            Start with these
-          </h2>
+      <section aria-labelledby="picks-title" className="section-doodles wave-top wave-above relative bg-[#FFF8E7]">
+        <div className={`${WRAP} pt-8 pb-16 sm:pb-20 space-y-12`}>
+          <SectionTitle id="picks-title" eyebrow="HAND-PICKED" title="Start with these free lessons." />
           {failed ? (
             <p className={`${card} max-w-xl mx-auto px-6 py-8 text-center text-sm font-semibold text-[#6B7280]`}>
               The hand-picked lessons couldn't be loaded just now. You can still explore the syllabus below.
@@ -206,20 +203,14 @@ export const DemoPage: React.FC = () => {
             </div>
           )}
         </div>
-        <Wave fill="#FFFFFF" flip />
       </section>
       )}
 
       {/* ---------- Explorer: class -> subject -> chapters ---------- */}
-      <section id="explore" ref={exploreRef} aria-labelledby="explore-title" className="landing-dots bg-white scroll-mt-20">
-        <div className={`${WRAP} pt-6 pb-16 sm:pb-20 space-y-10`}>
+      <section id="explore" ref={exploreRef} aria-labelledby="explore-title" className="section-doodles wave-top-flip relative bg-white scroll-mt-24">
+        <div className={`${WRAP} pt-8 pb-20 space-y-10`}>
           <div className="text-center flex flex-col items-center gap-3">
-            <Sticker bg="#A9E6D3" edge="#12A594" className="text-[11px] tracking-[0.1em]" rotate={-2}>
-              EXPLORE EVERY LECTURE
-            </Sticker>
-            <h2 id="explore-title" className="text-[30px] sm:text-[42px] leading-[1.08] text-[#1E2233] text-balance">
-              Pick a class, open a subject, press play.
-            </h2>
+            <SectionTitle id="explore-title" eyebrow="EXPLORE EVERY LECTURE" title="Pick a class, open a subject, press play." tone={['#A9E6D3', '#12A594']} />
             {!user && (
               <p className="text-[14px] font-semibold text-[#4B5168] max-w-xl">
                 {previewOn
@@ -308,7 +299,7 @@ export const DemoPage: React.FC = () => {
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-[20px] bg-[#FFF6E2] border-2 border-[#FFD97A]">
                         <p className="flex items-start gap-2.5 text-[13px] font-bold text-[#5E3D0C]">
                           <Lock className="w-4 h-4 mt-0.5 shrink-0" />
-                          {previewOn ? 'Chapter 1 is free to watch. ' : ''}Sign up free to unlock all {activeSubject.chapters.length} chapters, notes and progress saving.
+                          {previewOn ? 'Chapter 1 is free to watch. ' : ''}Sign up free to unlock all {activeSubject.chapters.length} chapters and save your progress.
                         </p>
                         <button onClick={() => setAuthModalOpen(true)} className={`${btnAccent} px-4 py-2 text-[13px] shrink-0`}>
                           Unlock everything free
@@ -328,13 +319,14 @@ export const DemoPage: React.FC = () => {
           )}
 
           {!user && (
-            <div className="relative overflow-hidden rounded-[32px] px-6 py-10 sm:p-12 text-center bg-[#FFC53D] border-[3px] border-[#E0A81F] shadow-[0_8px_0_#E0A81F]">
+            <div className="relative overflow-hidden rounded-[36px] px-6 py-12 sm:p-16 text-center bg-[#3B4FE0] border-[3px] border-[#2A3BB8] shadow-[0_10px_0_#2A3BB8] landing-confetti">
+              <Mascot className="hidden sm:block absolute -bottom-3 left-6 lg:left-14 w-28 lg:w-32 animate-bob" />
               <div className="relative flex flex-col items-center gap-3 max-w-xl mx-auto">
-                <h2 className="text-[28px] sm:text-[38px] leading-tight text-[#1E2233] text-balance">Liked it? Every chapter is free.</h2>
-                <p className="text-[15px] font-bold text-[#6B4E0A]">Sign up to unlock all lessons, save progress, earn XP and ask doubts.</p>
+                <h2 className="text-[30px] sm:text-[44px] leading-[1.05] text-white text-balance">Liked it? Every chapter is free.</h2>
+                <p className="text-[15.5px] font-bold text-white/85">Sign up to unlock all lessons, save progress, earn XP and ask doubts.</p>
                 <button
                   onClick={() => setAuthModalOpen(true)}
-                  className="mt-2 btn-3d [--edge:#2A3BB8] inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-[18px] bg-[#3B4FE0] text-white text-[15px] font-extrabold cursor-pointer group"
+                  className={`${btnAccent} mt-3 px-7 py-4 text-[15px] rounded-[20px] group`}
                 >
                   Start learning free <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                 </button>

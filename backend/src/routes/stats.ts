@@ -26,6 +26,20 @@ router.post('/track-visit', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Public — the home page's social proof: total visitors and registered students. Cached for a minute so a busy
+// landing page does not count users on every load.
+let publicCache: { at: number; body: { visitors: number; students: number } } | null = null;
+router.get('/public', async (_req, res) => {
+  if (!publicCache || Date.now() - publicCache.at > 60_000) {
+    const [row, students] = await Promise.all([
+      prisma.statsTotal.findUnique({ where: { id: 'totals' } }),
+      prisma.user.count({ where: { role: 'STUDENT' } }),
+    ]);
+    publicCache = { at: Date.now(), body: { visitors: row?.visitors ?? 0, students } };
+  }
+  res.set('Cache-Control', 'public, max-age=60').json(publicCache.body);
+});
+
 router.use(requireAuth, requireAdmin);
 
 router.get('/daily', async (req, res) => {

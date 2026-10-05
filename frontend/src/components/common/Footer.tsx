@@ -1,14 +1,20 @@
-import React from 'react';
-import { Shield, Sparkles } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Shield, Heart, Eye } from 'lucide-react';
 import { Logo, TAGLINE } from './Logo';
+import { StatsService } from '../../services/stats';
 
 interface FooterProps {
   onNavigate: (tab: 'home' | 'browse' | 'profile' | 'privacy') => void;
 }
 
 export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
+  // Total visitors (each browser counted once a day), from the public stats endpoint.
+  const [visitors, setVisitors] = useState(0);
+  useEffect(() => {
+    StatsService.getPublic().then((r) => setVisitors(r.visitors));
+  }, []);
   return (
-    <footer className="mt-auto bg-white border-t-[3px] border-[color:var(--card-line)] py-10">
+    <footer className="relative z-10 mt-auto bg-white border-t-[3px] border-[color:var(--card-line)] pt-10 pb-24 md:pb-20">
       <div className="w-full max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           {/* Logo & Description */}
@@ -38,7 +44,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               className="flex items-center gap-1 hover:text-[color:var(--brand)] transition-colors cursor-pointer"
             >
               <Shield className="w-3.5 h-3.5" />
-              Privacy Policy (DPDP Act)
+              Privacy Policy
             </button>
           </div>
         </div>
@@ -48,9 +54,17 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
           <p className="text-center sm:text-left">
             Educational revision platform. Curated from public educational resources. NCERT Prep is not officially affiliated with or endorsed by NCERT.
           </p>
-          <div className="flex items-center gap-1.5 text-[#12A594] font-semibold">
-            <Sparkles className="w-3 h-3" />
-            <span>Built for distraction-free revision</span>
+          <div className="flex items-center gap-4">
+            {visitors > 0 && (
+              <span className="flex items-center gap-1.5 font-semibold text-[#4B5168]">
+                <Eye className="w-3.5 h-3.5" />
+                <span className="tabular-nums font-extrabold">{visitors.toLocaleString('en-IN')}</span> visitors
+              </span>
+            )}
+            <div className="flex items-center gap-1.5 text-[#12A594] font-semibold">
+              <Heart className="w-3 h-3" />
+              <span>Built for distraction-free revision</span>
+            </div>
           </div>
         </div>
       </div>

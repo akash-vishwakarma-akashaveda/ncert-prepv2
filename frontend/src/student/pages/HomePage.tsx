@@ -4,7 +4,7 @@ import {
   Play,
   CheckCircle2,
   GraduationCap,
-  Sparkles,
+  CalendarClock,
   Megaphone,
   AlertTriangle,
   ArrowRight,
@@ -33,7 +33,7 @@ import { EmptyState, RankBadge, SubjectGlyph, btnAccent, btnPrimary, card, forma
 import { UserAvatar } from '../../data/avatars';
 
 const TONES: Record<DashboardAnnouncement['tone'], { box: string; icon: string; tag: string; label: string; Icon: React.ElementType }> = {
-  exam: { box: 'bg-[#1E2233] border-[#2C3350] text-white', icon: 'bg-[#FFC53D] text-[#1E2233]', tag: 'text-[#FFD97A]', label: 'EXAM NOTICE', Icon: Sparkles },
+  exam: { box: 'bg-[#1E2233] border-[#2C3350] text-white', icon: 'bg-[#FFC53D] text-[#1E2233]', tag: 'text-[#FFD97A]', label: 'EXAM NOTICE', Icon: CalendarClock },
   warning: { box: 'bg-[#FFF1D6] border-[#FFD97A] text-[#1E2233]', icon: 'bg-[#FFC53D] text-[#1E2233]', tag: 'text-[#8A5A14]', label: 'IMPORTANT', Icon: AlertTriangle },
   success: { box: 'bg-[#E7F7F1] border-[#A9E6D3] text-[#1E2233]', icon: 'bg-[#12A594] text-white', tag: 'text-[#0B7A67]', label: 'GOOD NEWS', Icon: CheckCircle2 },
   info: { box: 'bg-[color:var(--brand-soft)] border-[color:var(--brand-line)] text-[#1E2233]', icon: 'bg-[color:var(--brand)] text-white', tag: 'text-[color:var(--brand)]', label: 'FROM YOUR TEACHER', Icon: Megaphone },
@@ -214,7 +214,7 @@ export const HomePage: React.FC = () => {
             <KidsScene />
           ) : (
             <>
-              <span aria-hidden="true" className="hero-doodles opacity-90" />
+              <span aria-hidden="true" className="hero-doodles opacity-30" />
               <span aria-hidden="true" className="absolute -right-8 -top-8 w-44 h-44 rounded-full bg-white/10" />
             </>
           )}

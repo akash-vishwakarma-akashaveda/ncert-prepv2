@@ -1,25 +1,25 @@
 import React, { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { thumbnailUrl } from '../../components/home/JumpBackInCard';
+import { toDisplayTitle } from '../../components/home/StageShowcase';
+import { SubscribeBanner } from '../../components/common/SubscribePill';
 import {
   CheckCircle2,
-  Circle,
   Bookmark,
-  ChevronDown,
+  Play,
   ChevronRight,
   ChevronLeft,
   FileText,
-  PlayCircle,
   Video as VideoIcon,
   MessageCircleQuestion,
   Lock,
-  Sparkles,
+  Gift,
 } from 'lucide-react';
 import { useProgress } from '../../context/ProgressContext';
 import { useCatalogContext } from '../../context/CatalogContext';
 import { useAuth } from '../../context/AuthContext';
 import { isLessonUnlocked } from '../../services/accessControl';
 import { useDashboardConfig } from '../../hooks/useDashboardConfig';
-import { ChapterNotesContent, useChapterNotes } from '../../components/app/RevisionNotesModal';
 import { AskDoubtForm } from '../../components/player/AskDoubtForm';
 import { COMING_SOON_NOTE, DOUBTS_COMING_SOON } from '../../data/featureFlags';
 import { FeedbackForm } from '../../components/player/FeedbackForm';
@@ -29,13 +29,13 @@ import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 const PdfViewer = lazy(() => import('../../components/textbook/PdfViewer').then((m) => ({ default: m.PdfViewer })));
 import { EmptyState, btnAccent, btnPrimary, btnSecondary, btnTeal, card, chapterNumbers, formatDuration, lessonPath, subjectPath } from '../ui';
 
-type TabId = 'overview' | 'notes' | 'doubts' | 'feedback';
+type TabId = 'overview' | 'doubts' | 'feedback';
 
 // Visitors use /watch/:videoId (publicMode), signed-in students /app/lesson/:videoId.
 export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = false }) => {
   const { videoId = '' } = useParams();
   const navigate = useNavigate();
-  const { user, setAuthModalOpen } = useAuth();
+  const { user, isAdmin, setAuthModalOpen } = useAuth();
   const { videoMap, getSubjectsForClass, loading } = useCatalogContext();
   const { isCompleted, isFavorited, toggleCompleted, toggleFavorite, recordVideoWatched } = useProgress();
   const [tab, setTab] = useState<TabId>('overview');
@@ -82,10 +82,9 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
   const index = ordered.findIndex((v) => v.youtube_id === videoId);
   const next = index >= 0 ? ordered[index + 1] : undefined;
 
-  // Outline chapters are collapsible; the chapter holding the current lesson always opens.
+  // The chapter holding the current lesson (its number labels the lesson header).
   const currentChapterIndex = subject?.chapters.findIndex((c) => c.videos.some((v) => v.youtube_id === videoId)) ?? -1;
   const currentChapter = currentChapterIndex >= 0 ? subject?.chapters[currentChapterIndex] : undefined;
-  const currentChapterKey = currentChapter?.key;
   const currentVideoIndexInChapter = currentChapter?.videos.findIndex((v) => v.youtube_id === videoId) ?? -1;
 
   // Access control: signed-in users unlock everything; visitors get what the admin's access policy allows.
@@ -101,20 +100,6 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
     : false;
   const isFreePreview = !user && isUnlocked;
 
-  const [openChapters, setOpenChapters] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (currentChapterKey) setOpenChapters((prev) => (prev.has(currentChapterKey) ? prev : new Set(prev).add(currentChapterKey)));
-  }, [currentChapterKey]);
-  const toggleChapter = (key: string) =>
-    setOpenChapters((prev) => {
-      const nextSet = new Set(prev);
-      if (nextSet.has(key)) nextSet.delete(key);
-      else nextSet.add(key);
-      return nextSet;
-    });
-
-  const notesTarget = video || { class_sort: '', subject: '', chapter_id: '', chapter_name: '' };
-  const { notes, loading: notesLoading } = useChapterNotes(notesTarget, Boolean(video) && tab === 'notes');
 
   if (!video || !video.isActive) {
     return (
@@ -131,7 +116,6 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
   const saved = isFavorited(video.youtube_id);
   const tabs: { id: TabId; label: string }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'notes', label: 'Notes & Cheat Sheet' },
     { id: 'doubts', label: DOUBTS_COMING_SOON ? 'Doubts (soon)' : 'Ask a doubt' },
     { id: 'feedback', label: 'Feedback' },
   ];
@@ -148,15 +132,15 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
 
       {/* Free Preview Banner for Visitors */}
       {isFreePreview && (
-        <div className="rounded-[22px] bg-[#E7F7F1] border-[3px] border-[#A9E6D3] p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[13px]">
+        <div className="rounded-[20px] bg-white border-[3px] border-[#CDEFE4] shadow-[0_5px_0_#CDEFE4] p-3.5 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[13.5px]">
           <div className="flex items-center gap-3">
             <span className="w-9 h-9 rounded-[12px] bg-[#12A594] text-white flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4" />
+              <Gift className="w-4 h-4" />
             </span>
             <div className="font-semibold">
               <span className="font-extrabold text-[#0B7A67]">Free preview: </span>
               <span className="text-[#4B5168]">
-                You are viewing the free preview lesson for {video.subject}. Sign in to unlock all {ordered.length} lessons and formula cheat sheets!
+                this {video.subject} lesson is free to watch. Sign in to unlock all {ordered.length} lessons.
               </span>
             </div>
           </div>
@@ -185,7 +169,7 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
                 {video.video_title}
               </h2>
               <p className="mt-2 text-xs sm:text-sm font-semibold text-white/75 max-w-md">
-                Full chapter revision, formula cheat sheets, PYQs, and educator doubts require a free student account. It takes 10 seconds to sign in!
+                Every lesson in this subject opens with a free student account, along with progress saving and doubts. Signing in takes a few seconds.
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 <button onClick={() => setAuthModalOpen(true)} className={btnAccent}>
@@ -198,10 +182,14 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
             </div>
           )}
 
-          <div className="flex flex-col gap-4">
+          {/* On a card, not the wallpaper: the title and details must read clearly on every class background. */}
+          <div className={`${card} p-4 sm:p-5 flex flex-col gap-4`}>
             <div className="min-w-0">
               <p className="text-[10.5px] font-extrabold tracking-[0.1em] text-[#6B7280]">
                 {currentChapter ? `CHAPTER ${outlineNumbers[currentChapterIndex]} · ` : ''}
+                {currentChapter && currentChapter.videos.length > 1
+                  ? `LECTURE ${currentVideoIndexInChapter + 1} OF ${currentChapter.videos.length} · `
+                  : ''}
                 {video.subject.toUpperCase()}
                 {formatDuration(video.duration_seconds) && ` · ${formatDuration(video.duration_seconds).toUpperCase()}`}
               </p>
@@ -243,11 +231,14 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
               </button>
               {next && (
                 <button onClick={() => navigate(pathFor(next.youtube_id))} className={`${btnPrimary} sm:ml-auto`}>
-                  Next lesson <ChevronRight className="w-4 h-4" />
+                  {currentChapter?.videos.some((v) => v.youtube_id === next.youtube_id) ? 'Next lecture' : 'Next chapter'}{' '}
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               )}
             </div>
           </div>
+
+          {!isAdmin && <SubscribeBanner />}
 
           <div className={card}>
             <div role="tablist" aria-label="Lesson sections" className="m-3 mb-0 flex gap-1.5 p-1.5 rounded-2xl bg-[color:var(--page)] border-2 border-[#E3E5EC] overflow-x-auto">
@@ -314,24 +305,6 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
                   )}
                 </div>
               )}
-              {tab === 'notes' && (
-                <div className="space-y-5">
-                  {!user && !(isUnlocked && policy?.allowGuestNotes) ? (
-                    <div className="p-6 text-center bg-[color:var(--brand-soft)] border-[3px] border-[color:var(--brand-line)] rounded-[22px] space-y-3">
-                      <Lock className="w-8 h-8 text-[color:var(--brand)] mx-auto" />
-                      <h3 className="text-lg text-[#1E2233]">Revision Notes & Formula Cheat Sheets</h3>
-                      <p className="text-xs text-[#6B7280] max-w-sm mx-auto">
-                        Sign in to access comprehensive formula cheat sheets, definitions, and exam notes for this chapter.
-                      </p>
-                      <button onClick={() => setAuthModalOpen(true)} className={btnPrimary}>
-                        Sign in free to view notes
-                      </button>
-                    </div>
-                  ) : (
-                    <ChapterNotesContent notes={notes} loading={notesLoading} />
-                  )}
-                </div>
-              )}
               {tab === 'doubts' && (
                 <div>
                   {DOUBTS_COMING_SOON ? (
@@ -361,95 +334,91 @@ export const LessonPage: React.FC<{ publicMode?: boolean }> = ({ publicMode = fa
           </div>
         </div>
 
-        <aside className="self-start overflow-hidden xl:sticky xl:top-24 rounded-[24px] bg-[#E7F7F1] border-[3px] border-[#A9E6D3]">
-          <div className="px-4 pt-4 pb-3">
-            <h3 className="text-[17px]">{video.subject} lessons</h3>
-            <p className="text-xs font-bold text-[#0B7A67]">
-              {ordered.filter((v) => isCompleted(v.youtube_id)).length} of {ordered.length} lessons completed
-            </p>
+        {/* Playlist: every lesson in the subject as a thumbnail row, like a video course outline. */}
+        <aside className="self-start overflow-hidden xl:sticky xl:top-24 rounded-[24px] bg-white border-[3px] border-[#E3E5EC] shadow-[0_6px_0_#E3E5EC]">
+          <div className="px-4 pt-4 pb-3 border-b-2 border-[#F1F3FB] space-y-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <h3 className="text-[17px] text-[#1E2233]">{video.subject} lessons</h3>
+              <span className="text-[12px] font-extrabold text-[#6B7280] tabular-nums">
+                {ordered.filter((v) => isCompleted(v.youtube_id)).length}/{ordered.length} done
+              </span>
+            </div>
+            <div className="h-2 rounded-full bg-[#F1F3FB] overflow-hidden" aria-hidden="true">
+              <div className="h-full rounded-full bg-[#12A594]" style={{ width: `${ordered.length ? (ordered.filter((v) => isCompleted(v.youtube_id)).length / ordered.length) * 100 : 0}%` }} />
+            </div>
           </div>
-          <ol className="max-h-[70vh] overflow-y-auto px-2.5 pb-2.5 space-y-1.5">
-            {subject?.chapters.map((chapter, ci) => {
-              const bookHeading =
-                multiBook && chapter.textbook !== subject.chapters[ci - 1]?.textbook ? (
-                  <p className="px-1.5 pt-1.5 text-[10.5px] font-extrabold tracking-[0.08em] text-[#0B7A67]">{(chapter.textbook || 'Other').toUpperCase()}</p>
-                ) : null;
-              const open = openChapters.has(chapter.key);
-              const done = chapter.videos.filter((v) => isCompleted(v.youtube_id)).length;
-              const hasCurrent = chapter.key === currentChapterKey;
-              const panelId = `outline-${chapter.key}`;
-              return (
-                <React.Fragment key={chapter.key}>
-                {bookHeading}
-                <li className="rounded-2xl bg-white border-2 border-[#CDEFE4] overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => toggleChapter(chapter.key)}
-                    aria-expanded={open}
-                    aria-controls={panelId}
-                    className={`w-full flex items-start gap-3 px-3 py-2.5 text-left text-sm cursor-pointer hover:bg-[#F7F8FC] ${
-                      hasCurrent ? 'text-[color:var(--brand)]' : 'text-[#1E2233]'
-                    }`}
-                  >
-                    <span className="w-6 h-6 shrink-0 rounded-full bg-[#F1F3FB] text-[11px] font-extrabold text-[#6B7280] flex items-center justify-center">{outlineNumbers[ci]}</span>
-                    <span className="flex-1 min-w-0">
-                      <span className="block font-extrabold">{chapter.chapter_name}</span>
-                      <span className="block text-[11px] font-bold text-[#6B7280]">
-                        {chapter.videos.length
-                          ? `${done}/${chapter.videos.length} ${chapter.videos.length === 1 ? 'lecture' : 'lectures'}`
-                          : 'Coming soon'}
-                      </span>
+          <ol className="max-h-[70vh] overflow-y-auto p-2 space-y-0.5">
+            {subject?.chapters.map((chapter, ci) => (
+              <React.Fragment key={chapter.key}>
+                {multiBook && chapter.textbook !== subject.chapters[ci - 1]?.textbook && (
+                  <li className="px-2 pt-3 pb-1 text-[10.5px] font-extrabold tracking-[0.08em] text-[#0B7A67]">{(chapter.textbook || 'Other').toUpperCase()}</li>
+                )}
+                {chapter.videos.length === 0 ? (
+                  <li className="flex items-center gap-3 p-2 rounded-2xl opacity-60">
+                    <span className="w-24 aspect-video rounded-xl bg-[#F1F3FB] shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-[10.5px] font-extrabold tracking-[0.06em] text-[#9AA1B4]">CHAPTER {outlineNumbers[ci]} · SOON</span>
+                      <span className="block text-[13px] font-extrabold text-[#4B5168] line-clamp-2">{chapter.chapter_name}</span>
                     </span>
-                    {chapter.videos.length > 0 && done === chapter.videos.length ? (
-                      <CheckCircle2 className="w-4 h-4 mt-0.5 text-[#12A594] shrink-0" aria-label="Chapter completed" />
-                    ) : null}
-                    <ChevronDown
-                      className={`w-4 h-4 mt-0.5 text-[#6B7280] shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-
-                  {open && chapter.videos.length > 0 && (
-                    <ul id={panelId} className="pb-2">
-                      {chapter.videos.map((v, li) => {
-                        const current = v.youtube_id === video.youtube_id;
-                        const isVidUnlocked = isLessonUnlocked(v, user, outlineNumbers[ci] - 1, li, policy);
-
-                        return (
-                          <li key={v.youtube_id}>
-                            <Link
-                              to={pathFor(v.youtube_id)}
-                              aria-current={current ? 'page' : undefined}
-                              className={`flex items-start gap-3 pl-12 pr-3 py-2 text-[13px] font-bold ${
-                                current ? 'bg-[color:var(--brand-soft)] text-[color:var(--brand)]' : 'text-[#4B5168] hover:bg-[#F7F8FC]'
-                              }`}
-                            >
-                              {current ? (
-                                <PlayCircle className="w-4 h-4 mt-0.5 text-[color:var(--brand)] shrink-0" aria-label="Now playing" />
-                              ) : isCompleted(v.youtube_id) ? (
-                                <CheckCircle2 className="w-4 h-4 mt-0.5 text-[#12A594] shrink-0" aria-label="Completed" />
-                              ) : !isVidUnlocked ? (
-                                <Lock className="w-3.5 h-3.5 mt-0.5 text-[#9AA1B4] shrink-0" aria-label="Locked" />
-                              ) : (
-                                <Circle className="w-4 h-4 mt-0.5 text-[#D1D5DB] shrink-0" aria-label="Not started" />
-                              )}
-                              <span className="flex-1 min-w-0">
-                                <span className="block text-[11px] font-extrabold text-[#9AA1B4]">
-                                  Lecture {li + 1} {!isVidUnlocked && '· Sign in to watch'}
+                  </li>
+                ) : (
+                  <>
+                    {chapter.videos.length > 1 && (
+                      <li className="flex items-center gap-3 px-2 pt-3 pb-1.5">
+                        <span className="w-7 h-7 shrink-0 rounded-full bg-[color:var(--brand-soft)] text-[color:var(--brand)] text-[12px] font-extrabold flex items-center justify-center">
+                          {outlineNumbers[ci]}
+                        </span>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-[13.5px] font-extrabold text-[#1E2233] leading-snug line-clamp-2">{chapter.chapter_name}</span>
+                          <span className="block text-[11px] font-bold text-[#6B7280]">
+                            {chapter.videos.length} lectures · {chapter.videos.filter((v) => isCompleted(v.youtube_id)).length} done
+                          </span>
+                        </span>
+                      </li>
+                    )}
+                    {chapter.videos.map((v, li) => {
+                      const current = v.youtube_id === video.youtube_id;
+                      const isDone = isCompleted(v.youtube_id);
+                      const locked = !isLessonUnlocked(v, user, outlineNumbers[ci] - 1, li, policy);
+                      const multi = chapter.videos.length > 1;
+                      return (
+                        <li key={v.youtube_id} className={multi ? 'pl-4 relative before:absolute before:left-[21px] before:top-0 before:bottom-0 before:w-0.5 before:bg-[#EDEFF6]' : undefined}>
+                          <Link
+                            to={pathFor(v.youtube_id)}
+                            aria-current={current ? 'true' : undefined}
+                            className={`relative flex items-center gap-3 p-2 rounded-2xl transition-colors ${
+                              current ? 'bg-[color:var(--brand-soft)] ring-2 ring-[color:var(--brand-line)]' : 'hover:bg-[#F7F8FC]'
+                            }`}
+                          >
+                            <span className={`relative ${multi ? 'w-20' : 'w-24'} aspect-video rounded-xl overflow-hidden bg-[#1E2233] shrink-0`}>
+                              <img src={thumbnailUrl(v.youtube_id)} alt="" loading="lazy" className="w-full h-full object-cover" />
+                              {(locked || current) && (
+                                <span className="absolute inset-0 bg-black/40 flex items-center justify-center text-white">
+                                  {locked ? <Lock className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
                                 </span>
-                                <span className="block">{v.video_title}</span>
+                              )}
+                              {isDone && !current && (
+                                <span className="absolute right-1 bottom-1 w-5 h-5 rounded-full bg-[#12A594] text-white flex items-center justify-center">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                </span>
+                              )}
+                            </span>
+                            <span className="min-w-0">
+                              <span className={`block text-[10.5px] font-extrabold tracking-[0.06em] ${current ? 'text-[color:var(--brand)]' : 'text-[#9AA1B4]'}`}>
+                                {current ? 'NOW PLAYING' : multi ? `LECTURE ${li + 1}` : `CHAPTER ${outlineNumbers[ci]}`}
                               </span>
-                              <span className="text-xs font-normal text-[#6B7280] shrink-0">{formatDuration(v.duration_seconds)}</span>
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </li>
-                </React.Fragment>
-              );
-            })}
+                              <span className={`block text-[13px] font-extrabold leading-snug line-clamp-2 ${current ? 'text-[color:var(--brand)]' : 'text-[#1E2233]'}`}>
+                                {multi ? toDisplayTitle(v.video_title) : chapter.chapter_name}
+                              </span>
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </>
+                )}
+              </React.Fragment>
+            ))}
           </ol>
         </aside>
       </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, CheckCircle2, AlertCircle, ArrowRight, Sparkles, LayoutGrid } from 'lucide-react';
+import { Play, CheckCircle2, AlertCircle, ArrowRight, LayoutGrid } from 'lucide-react';
 import { Video } from '../../types';
 
 interface JumpBackInCardProps {
@@ -27,10 +27,9 @@ export const JumpBackInCard: React.FC<JumpBackInCardProps> = ({
         aria-labelledby="jump-back-in-title"
         className={`bento relative overflow-hidden p-6 sm:p-8 flex flex-col justify-between gap-6 ${className}`}
       >
-        <div className="absolute inset-0 bg-mesh pointer-events-none" />
         <div className="relative space-y-3">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-white/80 border-2 border-[#E3E5EC] text-[color:var(--brand)]">
-            <Sparkles className="w-3.5 h-3.5" />
+            <Play className="w-3.5 h-3.5" />
             Jump back in
           </span>
           <h2 id="jump-back-in-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1E2233] text-balance">

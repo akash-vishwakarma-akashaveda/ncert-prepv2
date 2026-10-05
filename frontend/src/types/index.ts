@@ -26,8 +26,14 @@ export interface User {
   displayName?: string | null;
   photoURL?: string | null;
   phoneNumber?: string | null;
+  /** Optional, typed by the student. */
+  city?: string | null;
   role?: 'student' | 'admin';
   referral_code?: string | null;
+  /** True once a referral code is on the account (entered at sign-up or during setup). */
+  has_referrer?: boolean;
+  /** The referral code this student joined with, shown on the profile so they can claim referral goodies. */
+  referred_by_code?: string | null;
   grade_preference?: string;
   study_goal_minutes?: number;
   streak_days?: number;
@@ -50,12 +56,13 @@ export interface User {
 
 export interface UserConsent {
   status: 'granted' | 'pending_parent';
-  age_group: 'adult' | 'child';
-  method: 'self' | 'parent';
+  age_group: 'adult' | 'child' | 'under13' | '13-17';
+  method: 'self' | 'parent' | 'parent_notified';
   notice_version: string;
   language?: 'en' | 'hi';
   parent_name?: string;
   parent_email?: string;
+  parent_phone?: string | null;
   granted_at?: unknown;
   requested_at?: unknown;
 }

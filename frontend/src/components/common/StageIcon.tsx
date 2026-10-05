@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Sparkles,
+  Sun,
   Compass,
   Palette,
   Rocket,
@@ -31,8 +31,8 @@ interface StageIconProps extends LucideProps {
 
 export const StageIcon: React.FC<StageIconProps> = ({ name, ...props }) => {
   switch (name) {
-    case 'Sparkles':
-      return <Sparkles {...props} />;
+    case 'Sun':
+      return <Sun {...props} />;
     case 'Compass':
       return <Compass {...props} />;
     case 'Palette':

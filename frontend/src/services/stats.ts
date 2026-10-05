@@ -68,6 +68,15 @@ export const StatsService = {
     }
   },
 
+  /** Public counts for the home page. Zeros if the API is unreachable, so the page just hides them. */
+  async getPublic(): Promise<{ visitors: number; students: number }> {
+    try {
+      return await api.get<{ visitors: number; students: number }>('/api/stats/public');
+    } catch {
+      return { visitors: 0, students: 0 };
+    }
+  },
+
   async getTotals(): Promise<TotalStats> {
     const zero: TotalStats = { visitors: 0, registrations: 0, lessonsStarted: 0, lessonsCompleted: 0, doubtsAsked: 0 };
     try {

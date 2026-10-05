@@ -58,8 +58,16 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [referralCode, setReferralCode] = useState(() => searchParams.get('ref') || '');
+  const [referralCode, setReferralCode] = useState(() => {
+    try {
+      return searchParams.get('ref') || localStorage.getItem('signup_ref') || '';
+    } catch {
+      return searchParams.get('ref') || '';
+    }
+  });
   const [showPassword, setShowPassword] = useState(false);
+  // Google is the quick way in; the email form stays tucked away unless asked for (or a reset link needs it).
+  const [showEmail, setShowEmail] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -159,16 +167,26 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
               <button
                 onClick={() => run(signInWithGoogle)}
                 disabled={submitting}
-                className="btn-3d [--edge:#E3E5EC] w-full flex items-center justify-center gap-3 p-3.5 rounded-2xl bg-white border-[3px] border-[#E3E5EC] hover:bg-[#F7F8FC] text-sm font-extrabold text-[#1E2233] cursor-pointer disabled:opacity-60"
+                className="btn-3d [--edge:#2A3BB8] w-full flex items-center justify-center gap-3 p-4 rounded-2xl bg-[#3B4FE0] hover:bg-[#3446D1] text-[15px] font-extrabold text-white cursor-pointer disabled:opacity-60"
               >
-                <GoogleMark />
+                <span className="w-7 h-7 rounded-full bg-white flex items-center justify-center">
+                  <GoogleMark />
+                </span>
                 {submitting ? 'Opening Google…' : 'Continue with Google'}
               </button>
-              <div className="flex items-center gap-3 text-[11px] font-extrabold text-[#9AA1B4]">
-                <span className="flex-1 border-t-2 border-[color:var(--card-line)]" /> OR <span className="flex-1 border-t-2 border-[color:var(--card-line)]" />
-              </div>
+              {!showEmail && (
+                <button type="button" onClick={() => setShowEmail(true)} className="w-full text-center text-[13px] font-extrabold text-[#6B7280] hover:text-[#1E2233] cursor-pointer">
+                  Use email instead
+                </button>
+              )}
+              {showEmail && (
+                <div className="flex items-center gap-3 text-[11px] font-extrabold text-[#9AA1B4]">
+                  <span className="flex-1 border-t-2 border-[color:var(--card-line)]" /> OR WITH EMAIL <span className="flex-1 border-t-2 border-[color:var(--card-line)]" />
+                </div>
+              )}
             </>
           )}
+          {(showEmail || mode === 'forgot') && (
           <form onSubmit={submit} className="space-y-3.5" noValidate>
           {mode === 'signup' && (
             <div>
@@ -245,6 +263,7 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
             </p>
           )}
           </form>
+          )}
         </>
 
       <p className="text-[11px] font-semibold leading-relaxed text-[#9AA1B4] text-center">

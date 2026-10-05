@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Sparkles,
+  MessageCircleQuestion,
   BookOpenCheck,
   Timer,
   Flame,
@@ -65,7 +65,7 @@ const TYPE_CONFIG: Record<
   },
   doubt_asked: {
     label: 'Doubt Asked',
-    icon: Sparkles,
+    icon: MessageCircleQuestion,
     color: '#EC4899',
     bg: '#FCE7F3',
     border: '#FBCFE8',

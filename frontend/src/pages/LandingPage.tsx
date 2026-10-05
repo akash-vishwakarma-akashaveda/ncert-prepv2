@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Play, FileText, MessageCircleQuestion, Bell, Check, Star, ChevronDown, Flame, BookOpen, Sparkles, Route } from 'lucide-react';
+import { ArrowRight, Play, FileText, MessageCircleQuestion, Bell, Check, Star, ChevronDown, Flame, BookOpen, NotebookPen, Route } from 'lucide-react';
 import { ClassGroup, Video } from '../types';
 import { JumpBackInCard } from '../components/home/JumpBackInCard';
 import { ClassCard } from '../components/home/ClassGrid';
@@ -10,6 +10,8 @@ import { SubjectGlyph, btnAccent, card } from '../student/ui';
 import { Mascot } from '../student/stage';
 import { STAGES, StagePreview, StageShowcase } from '../components/home/StageShowcase';
 import { TAGLINE } from '../components/common/Logo';
+import { StatsService } from '../services/stats';
+import { getGradeStage } from '../data/stageThemes';
 
 interface LandingPageProps {
   classes: ClassGroup[];
@@ -48,7 +50,7 @@ export const Wave: React.FC<{ fill: string; flip?: boolean }> = ({ fill, flip })
   </svg>
 );
 
-const SectionTitle: React.FC<{ id: string; eyebrow: string; title: string; light?: boolean; tone?: [string, string] }> = ({
+export const SectionTitle: React.FC<{ id: string; eyebrow: string; title: string; light?: boolean; tone?: [string, string] }> = ({
   id,
   eyebrow,
   title,
@@ -68,7 +70,7 @@ const SectionTitle: React.FC<{ id: string; eyebrow: string; title: string; light
 const FAQ: [string, string][] = [
   ['Are there ads?', "Lessons play from YouTube, so YouTube's own ads can appear there — that's outside our control. Nothing inside NCERT Prep itself is for sale."],
   ['Is it really free?', 'Yes. Create a free account and every lesson, chapter note and doubt reply is included — no premium tier to unlock.'],
-  ["Is my child's data safe?", "We only collect what's needed to save progress, and follow India's DPDP rules: a parent approves the account for anyone under 18. Full details are in our Privacy Notice."],
+  ["Is my child's data safe?", "We only collect what's needed to save progress, and follow India's data protection law: a parent approves the account for anyone under 18. Full details are in our Privacy Notice."],
   ['Can my child ask a question if they get stuck?', "Yes — every lesson has an 'Ask a doubt' box. A teacher replies privately inside the app, never in public comments."],
   ['Does this replace school or tuition?', "No — it's a clear, distraction-free way to revise NCERT chapters at your own pace, alongside school."],
 ];
@@ -76,10 +78,26 @@ const FAQ: [string, string][] = [
 const STEPS = [
   { title: 'Pick your class', body: 'Tell us the class you study in. Your dashboard, syllabus and search follow it.', Icon: BookOpen, bg: '#FFC53D', edge: '#E0A81F' },
   { title: 'Follow the trail', body: 'Go chapter by chapter. Finished lessons are ticked off automatically.', Icon: Route, bg: '#FFFFFF', edge: '#CDEFE4' },
-  { title: 'Revise & ask', body: 'Open the cheat sheet before exams, use the focus timer, and ask doubts when stuck.', Icon: Sparkles, bg: '#FF9EB5', edge: '#E07A95' },
+  { title: 'Revise & ask', body: 'Read the chapter in your NCERT book before exams, use the focus timer, and ask doubts when stuck.', Icon: NotebookPen, bg: '#FF9EB5', edge: '#E07A95' },
 ];
 
 // One colour block per age look; the dark one mirrors the Class 11–12 "focus desk" theme.
+/** "Class 1 to 12" cards: who each age group is and what they study (the stage previews show how it looks). */
+const STAGE_COPY: Record<string, { eyebrow: string; blurb: string }> = {
+  primary: {
+    eyebrow: 'PRIMARY SCHOOL',
+    blurb: 'English, Maths, EVS and Hindi in short, friendly videos, with Pip the owl cheering on every finished chapter.',
+  },
+  middle: {
+    eyebrow: 'MIDDLE SCHOOL',
+    blurb: 'Science, Maths, Social Science and languages, chapter by chapter, building a steady path to the Class 10 boards.',
+  },
+  senior: {
+    eyebrow: 'SENIOR SECONDARY',
+    blurb: 'Science, Commerce and Humanities streams, with clear revision of every chapter before the board exams.',
+  },
+};
+
 const STAGE_BLOCKS = [
   { bg: '#DDF1FF', edge: '#A9D8FA', ink: '#1E2233', sub: '#1E6FB0', rotate: -2 },
   { bg: '#3B4FE0', edge: '#2A3BB8', ink: '#FFFFFF', sub: '#C7CDF8', rotate: 1.5 },
@@ -135,6 +153,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const { setAuthModalOpen } = useAuth();
   const lastWatchedVideo = lastWatchedId ? allVideos.find((v) => v.youtube_id === lastWatchedId) || null : null;
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  // Registered students, from the public stats endpoint (the visitor count lives in the footer).
+  const [reach, setReach] = useState({ visitors: 0, students: 0 });
+  useEffect(() => {
+    StatsService.getPublic().then(setReach);
+  }, []);
 
   const stats = useMemo(() => {
     const active = allVideos.filter((v) => v.isActive);
@@ -145,10 +168,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
     };
   }, [allVideos]);
 
-  const lessonsPerStage = useMemo(
-    () => Object.fromEntries(STAGES.map((s) => [s.id, allVideos.filter((v) => v.isActive && v.class_sort === s.classSort).length])),
-    [allVideos]
-  );
+  // Lessons across each whole class range (1–5, 6–10, 11–12).
+  const lessonsPerStage = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allVideos.forEach((v) => {
+      if (v.isActive) counts[getGradeStage(v.class_sort)] = (counts[getGradeStage(v.class_sort)] || 0) + 1;
+    });
+    return counts;
+  }, [allVideos]);
 
   // Reveal sections as they scroll into view; re-scan when the class grid finishes loading.
   const rootRef = useRef<HTMLDivElement>(null);
@@ -179,7 +206,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   return (
     <div ref={rootRef} className="overflow-x-clip">
       {/* ---------- Hero: bold indigo band, stickers, the live app card and Pip the owl ---------- */}
-      <section className="landing-hero relative text-white">
+      <section
+        // With the subject tapes below, the blue runs straight into them (they are the divider); without them the
+        // hero ends in a wave.
+        className={`landing-hero-indigo relative text-white ${stats.subjectNames.length > 0 ? '' : 'wave-above'}`}
+      >
         <div className={`${WRAP} relative pt-12 sm:pt-20 pb-6 grid lg:grid-cols-[1.05fr_1fr] gap-14 lg:gap-10 items-center`}>
           <div className="flex flex-col items-start gap-5 sm:gap-6">
             <Sticker bg="#FFC53D" edge="#E0A81F" className="animate-fade-up text-[11.5px] tracking-[0.08em]" rotate={-3}>
@@ -221,6 +252,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     [<CountUp key="l" to={stats.lessons} />, 'lessons', '#FFC53D', -3],
                     [<CountUp key="c" to={classes.length} />, 'classes', '#A9E6D3', 2],
                     [<CountUp key="s" to={stats.subjects} />, 'subjects', '#FFB8C9', -2],
+                    // Only shown once there is someone to count.
+                    ...(reach.students > 0 ? [[<CountUp key="u" to={reach.students} />, 'students', '#C7CDF8', 3]] : []),
                   ] as [React.ReactNode, string, string, number][]
                 ).map(([value, label, ink, rot]) => (
                   <div
@@ -263,12 +296,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
         </div>
-        <Wave fill="#FFF8E7" />
       </section>
 
       {/* ---------- Subjects: two crossed tapes ---------- */}
       {stats.subjectNames.length > 0 && (
-        <section aria-label="Subjects covered" className="relative bg-[#FFF8E7] py-10 sm:py-14">
+        <section
+          aria-label="Subjects covered"
+          // Blue above the tapes, cream below: the crossed tapes cover the join, so there is no gap or curve here.
+          className="relative py-10 sm:py-14 bg-[linear-gradient(#3B4FE0_50%,#FFF8E7_50%)]"
+        >
           <div aria-hidden="true" className="absolute inset-x-[-5%] top-1/2 -translate-y-1/2 h-14 bg-[#12A594] rotate-[2.5deg] border-y-[3px] border-[#0B7A67]" />
           <div className="marquee relative -mx-[5%] rotate-[-2deg] bg-[#FFC53D] border-y-[3px] border-[#E0A81F] py-3 overflow-hidden">
             <ul className="flex w-max gap-3 animate-marquee">
@@ -288,14 +324,25 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       )}
 
       {/* ---------- One app, three looks: tilted colour blocks ---------- */}
-      <section id="grows" aria-labelledby="grows-title" className="bg-[#FFF8E7] scroll-mt-20">
+      <section
+        id="grows"
+        aria-labelledby="grows-title"
+        // Takes the hero's curve itself when there is no subject strip between them.
+        className={`section-doodles wave-above relative bg-[#FFF8E7] scroll-mt-20 ${stats.subjectNames.length > 0 ? '' : 'wave-top'}`}
+      >
         <div className={`${WRAP} pt-8 pb-16 sm:pb-24 space-y-12 sm:space-y-16`}>
-          <SectionTitle id="grows-title" eyebrow="GROWS WITH YOU" title="One app. Three looks. It grows up with every class." />
+          <div className="space-y-4">
+            <SectionTitle id="grows-title" eyebrow="CLASS 1 TO 12" title="Every class from 1 to 12, in one place." />
+            <p data-reveal className="max-w-2xl mx-auto text-center text-[15.5px] sm:text-[16.5px] font-semibold leading-relaxed text-[#4B5168]">
+              Whichever class you are in, every NCERT chapter is here, explained at your level. The app even changes its look as
+              you grow, from playful in primary school to calm and focused for the boards.
+            </p>
+          </div>
           <div className="grid md:grid-cols-3 gap-8 md:gap-6 lg:gap-8">
             {STAGES.map((stage, i) => {
               const b = STAGE_BLOCKS[i];
               const count = lessonsPerStage[stage.id] || 0;
-              const n = parseInt(stage.classSort, 10);
+              const copy = STAGE_COPY[stage.id];
               return (
                 <div key={stage.id} data-reveal style={stagger(i, 140)}>
                   <div
@@ -305,16 +352,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <StagePreview stage={stage} videos={allVideos} compact />
                     <div className="px-1 flex flex-col gap-1.5 flex-1">
                       <span className="text-[11px] font-extrabold tracking-[0.1em]" style={{ color: b.sub }}>
-                        {stage.name.toUpperCase()}
+                        {copy.eyebrow}
                       </span>
                       <h3 className="font-display text-[28px] leading-tight">{stage.label}</h3>
-                      <p className="text-[13.5px] font-semibold leading-relaxed opacity-85">{stage.blurb}</p>
+                      <p className="text-[13.5px] font-semibold leading-relaxed opacity-85">{copy.blurb}</p>
                     </div>
                     <button
                       onClick={() => onSelectClass(stage.classSort)}
                       className="btn-3d [--edge:#E0A81F] self-start inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#FFC53D] text-[#1E2233] text-[13.5px] font-extrabold cursor-pointer group"
                     >
-                      Browse Class {n}
+                      Explore {stage.label}
                       {count > 0 && <span className="text-[11px] font-bold opacity-70">· {count} lessons</span>}
                       <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-1" />
                     </button>
@@ -324,11 +371,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             })}
           </div>
         </div>
-        <Wave fill="#FFFFFF" flip />
       </section>
 
       {/* ---------- Features: colourful bento ---------- */}
-      <section id="features" aria-labelledby="features-title" className="landing-dots bg-white scroll-mt-20">
+      <section id="features" aria-labelledby="features-title" className="landing-dots wave-top-flip wave-above relative bg-white scroll-mt-20">
         <div className={`${WRAP} pt-6 pb-16 sm:pb-24 space-y-12`}>
           <SectionTitle id="features-title" eyebrow="EVERYTHING FOR REVISION" title="Watch, revise and ask. All in one happy place." tone={['#A9E6D3', '#12A594']} />
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 lg:auto-rows-[minmax(150px,auto)] gap-5">
@@ -384,8 +430,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             <div data-reveal style={stagger(3)} className="fun-tile bg-[#EDE6FF] border-[#CDBDFA] [--edge:#CDBDFA] text-[#1E2233]">
               <FileText className="fun-tile-icon bg-[#8B6CF0] text-white" />
-              <h3 className="text-[20px]">Notes & cheat sheets</h3>
-              <p className="text-[13px] font-semibold text-[#4B5168]">Summaries, formulas, exam tips and PDFs for each chapter.</p>
+              <h3 className="text-[20px]">NCERT books</h3>
+              <p className="text-[13px] font-semibold text-[#4B5168]">Every chapter's NCERT textbook, one tap away from its lesson.</p>
             </div>
 
             <div data-reveal style={stagger(4)} className="fun-tile sm:col-span-2 bg-[#FF7A59] border-[#E0603F] [--edge:#E0603F] text-white">
@@ -409,21 +455,23 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
         </div>
-        <Wave fill="#EEF0FE" />
       </section>
 
       {/* ---------- Classes: jump back in + class cards ---------- */}
-      <section className="bg-[#EEF0FE]">
+      <section className="section-doodles wave-top wave-above relative bg-[#E6F4FF]">
         <div className={`${WRAP} pt-6 pb-16 sm:pb-24 space-y-10`}>
           <SectionTitle id="classes-title" eyebrow="FREE PREVIEWS" title="Pick your class and start exploring." tone={['#FFB8C9', '#E07A95']} />
-          <div data-reveal>
-            <JumpBackInCard
-              lastWatchedVideo={lastWatchedVideo}
-              isCompleted={lastWatchedVideo ? isCompleted(lastWatchedVideo.youtube_id) : false}
-              onSelectVideo={onSelectVideo}
-              onBrowse={scrollToGrid}
-            />
-          </div>
+          {/* Only when there is something to resume: an empty "start your first lesson" box made this band look flat. */}
+          {lastWatchedVideo && (
+            <div data-reveal>
+              <JumpBackInCard
+                lastWatchedVideo={lastWatchedVideo}
+                isCompleted={lastWatchedVideo ? isCompleted(lastWatchedVideo.youtube_id) : false}
+                onSelectVideo={onSelectVideo}
+                onBrowse={scrollToGrid}
+              />
+            </div>
+          )}
           <div id="visual-grid" className="scroll-mt-24">
             {catalogLoading && classes.length === 0 ? (
               <ClassGridSkeleton />
@@ -456,11 +504,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             )}
           </div>
         </div>
-        <Wave fill="#12A594" flip />
       </section>
 
       {/* ---------- How it works: teal band, winding path ---------- */}
-      <section id="how-it-works" aria-labelledby="how-title" className="relative bg-[#12A594] scroll-mt-20 overflow-hidden">
+      <section id="how-it-works" aria-labelledby="how-title" className="wave-top-flip wave-above relative bg-[#12A594] scroll-mt-20 overflow-hidden">
         <div className={`${WRAP} pt-6 pb-16 sm:pb-24 space-y-12`}>
           <SectionTitle id="how-title" eyebrow="HOW IT WORKS" title="Three steps to a calmer study routine." light />
           <ol className="relative grid md:grid-cols-3 gap-10 md:gap-8">
@@ -484,11 +531,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             ))}
           </ol>
         </div>
-        <Wave fill="#FFFFFF" />
       </section>
 
       {/* ---------- FAQ: Pip on the left, answers on the right ---------- */}
-      <section id="faq" aria-labelledby="faq-title" className="bg-white scroll-mt-20">
+      <section id="faq" aria-labelledby="faq-title" className="section-doodles wave-top relative bg-white scroll-mt-20">
         <div className={`${WRAP} pt-6 pb-16 sm:pb-24 grid lg:grid-cols-[0.8fr_1.2fr] gap-10 lg:gap-16 items-start`}>
           <div data-reveal className="lg:sticky lg:top-24 flex flex-col items-start gap-4">
             <Sticker bg="#EEF0FE" edge="#C7CDF8" className="text-[11px] tracking-[0.1em] text-[#3B4FE0]" rotate={-2}>
@@ -535,7 +581,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ---------- Closing CTA ---------- */}
-      <section className="bg-white">
+      <section className="section-doodles relative bg-white">
         <div className={`${WRAP} pb-20`}>
           <div
             data-reveal

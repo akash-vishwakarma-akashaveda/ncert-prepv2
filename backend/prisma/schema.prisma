@@ -57,6 +57,8 @@ model User {
   displayName      String?
   photoUrl         String?
   phoneNumber      String?
+  // Optional, typed by the student (onboarding or profile).
+  city             String?
   xp               Int           @default(0)
   streak           Int           @default(0)
   lastActiveDate   String?
@@ -75,6 +77,7 @@ model User {
   consentLanguage      String?
   consentParentName    String?
   consentParentEmail   String?
+  consentParentPhone   String?
   consentGrantedAt     DateTime?
   consentRequestedAt   DateTime?
 

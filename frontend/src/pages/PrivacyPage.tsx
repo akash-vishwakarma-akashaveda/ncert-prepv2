@@ -52,7 +52,7 @@ export const PrivacyPage: React.FC<PrivacyPageProps> = ({ onNavigateHome }) => {
         </span>
         <h1 className="text-[28px] sm:text-[32px] leading-tight text-[#1E2233]">Privacy notice</h1>
         <p className="text-xs font-bold text-[#6B7280]">
-          Notice version {NOTICE_VERSION} · Digital Personal Data Protection Act, 2023 · Available in English and हिन्दी
+          Notice version {NOTICE_VERSION} · Available in English and हिन्दी
         </p>
       </div>
 

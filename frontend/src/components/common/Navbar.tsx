@@ -1,3 +1,4 @@
+import { GoodiesMarquee } from './GoodiesMarquee';
 import React, { useEffect, useState } from 'react';
 import { Search, LogIn, LayoutDashboard, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -73,6 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b-[3px] border-[color:var(--card-line)]">
+      <GoodiesMarquee />
       <div className="w-full max-w-[1240px] mx-auto px-4 sm:px-6 lg:px-10 h-[74px] flex items-center justify-between gap-4">
         <Logo onClick={() => onNavigate('home')} />
 

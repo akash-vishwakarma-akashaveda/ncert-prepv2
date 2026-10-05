@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Play, Flame, Star, BookOpenCheck, Timer, Sparkles, NotebookPen } from 'lucide-react';
+import { Play, Flame, Star, BookOpenCheck, Timer, Sun, NotebookPen } from 'lucide-react';
 import { Video } from '../../types';
 import { EducationalStage } from '../../data/stageThemes';
 import { KidsScene } from '../../student/stage';
@@ -21,7 +21,7 @@ export const STAGES: {
     name: 'Sky garden',
     learner: 'Aanya',
     blurb: 'Big friendly buttons, colourful stickers and Pip the owl keep young learners curious.',
-    Icon: Sparkles,
+    Icon: Sun,
   },
   {
     id: 'middle',
@@ -38,7 +38,7 @@ export const STAGES: {
     label: 'Class 11–12',
     name: 'Focus desk',
     learner: 'Meera',
-    blurb: 'A calm, distraction-free desk with a focus timer and chapter notes for serious revision.',
+    blurb: 'A calm, distraction-free desk with a focus timer and the NCERT books for serious revision.',
     Icon: Timer,
   },
 ];
@@ -47,7 +47,13 @@ export const STAGES: {
 // shouting ("Ready for THE WIT THAT WON HEARTS?"), so this is display-only for this marketing card.
 export function toDisplayTitle(text: string): string {
   if (text !== text.toUpperCase() || text === text.toLowerCase()) return text;
-  return text.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+  // Title case, keeping short joining words lowercase unless they start the title ("Lines and Angles").
+  const small = new Set(['a', 'an', 'and', 'as', 'at', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'with']);
+  return text
+    .toLowerCase()
+    .split(/(\s+)/)
+    .map((w, i) => (i > 0 && small.has(w) ? w : w.replace(/^\S/, (c) => c.toUpperCase())))
+    .join('');
 }
 
 const STATS = [
@@ -72,8 +78,10 @@ export const StagePreview: React.FC<{ stage: (typeof STAGES)[number]; videos: Vi
     <div data-stage={stage.id} className="stage-bg relative rounded-[26px] border-[3px] border-[color:var(--card-line)] p-3.5 sm:p-4 flex flex-col gap-3 overflow-hidden">
       <div
         className={`relative overflow-hidden rounded-[22px] p-4 h-[176px] flex flex-col gap-2 ${
-          kids ? 'hero-kids text-[#1E2233] pr-28' : 'text-white bg-gradient-to-br from-[color:var(--brand)] to-[color:var(--brand-to)]'
+          kids ? 'hero-kids text-[#1E2233] pr-28' : 'text-white bg-[color:var(--brand)]'
         }`}
+        // Flat sky on the home page (the kids app keeps its gradient .hero-kids).
+        style={kids ? { background: '#D6EEFF' } : undefined}
       >
         {kids ? (
           <KidsScene />
@@ -158,8 +166,6 @@ export const StageShowcase: React.FC<{ videos: Video[] }> = ({ videos }) => {
       onFocusCapture={() => setPaused(true)}
       onBlurCapture={() => setPaused(false)}
     >
-      <span aria-hidden="true" className="absolute -inset-4 -z-10 rounded-[32px] bg-gradient-to-br from-[#3B4FE0]/12 via-transparent to-[#12A594]/10 blur-2xl" />
-
       <div role="tablist" aria-label="See the app for each age group" className="glass-panel relative grid grid-cols-3 gap-1.5 p-1.5 rounded-[18px]">
         {STAGES.map((s, i) => {
           const active = i === index;
@@ -178,7 +184,6 @@ export const StageShowcase: React.FC<{ videos: Video[] }> = ({ videos }) => {
               }`}
             >
               <span className="text-[12.5px] font-extrabold whitespace-nowrap">{s.label}</span>
-              <span className={`text-[10.5px] font-bold ${active ? 'text-white/80' : 'text-[#9AA1B4]'}`}>{s.name}</span>
               {active && rotating && (
                 <span aria-hidden="true" key={index} className="absolute bottom-0 left-0 h-1 w-full bg-[#FFC53D] origin-left animate-[grow-x_4.5s_linear]" />
               )}
@@ -189,7 +194,7 @@ export const StageShowcase: React.FC<{ videos: Video[] }> = ({ videos }) => {
 
       {/* All three previews share one grid cell, so the panel is always as tall as the tallest one.
           Swapping only toggles visibility: the card (and the hero around it) never changes height. */}
-      <div id="stage-preview" role="tabpanel" aria-label={`${stage.label}: ${stage.name}`} className="relative grid">
+      <div id="stage-preview" role="tabpanel" aria-label={stage.label} className="relative grid">
         {STAGES.map((s, i) => (
           <div
             key={s.id}

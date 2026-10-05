@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { api } from '../services/api/client';
-import { useAuth } from '../context/AuthContext';
 import { NoticeView } from '../components/consent/ConsentGate';
 import { NoticeLang } from '../data/privacyNotice';
 import { useConfirm } from './admin/adminUi';
@@ -28,10 +27,8 @@ const DONE: Record<string, [string, string]> = {
 export const ParentConsentPage: React.FC = () => {
   const [params] = useSearchParams();
   const token = params.get('token') || '';
-  const { user, setAuthModalOpen, emailVerified, refreshEmailVerified, resendVerification } = useAuth();
   const [req, setReq] = useState<RequestInfo | null>(null);
   const [lang, setLang] = useState<NoticeLang>('en');
-  const [guardian, setGuardian] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,10 +46,9 @@ export const ParentConsentPage: React.FC = () => {
     setBusy(true);
     setError(null);
     try {
-      if (!emailVerified && !(await refreshEmailVerified())) throw new Error('Verify your email address first (check your inbox), then try again.');
       const res = await api.post<{ status: RequestInfo['status'] }>(`/api/consent/${encodeURIComponent(token)}/decide`, {
         decision,
-        declaredGuardian: guardian,
+        declaredGuardian: agreed,
         agreed,
         language: lang,
       });
@@ -100,52 +96,26 @@ export const ParentConsentPage: React.FC = () => {
         <>
           <NoticeView lang={lang} onLang={setLang} />
 
-          {!user ? (
-            <div className="rounded-[18px] bg-[#EEF0FE] border-2 border-[#C7CDF8] p-4 space-y-3">
-              <p className="text-[13px] font-bold text-[#1E2233]">
-                To confirm it's you, sign in with <span className="text-[#3B4FE0]">{req.parentEmail}</span> (Google, or register with that email).
-              </p>
-              <button onClick={() => setAuthModalOpen(true)} className="btn-3d [--edge:#2A3BB8] px-6 py-3 rounded-2xl bg-[#3B4FE0] text-white text-sm font-extrabold cursor-pointer">
-                Sign in to continue
+          <div className="space-y-3">
+            <label className="flex items-start gap-3 p-3.5 rounded-[18px] bg-[#F7F8FC] border-2 border-[#E3E5EC] cursor-pointer">
+              <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 w-5 h-5 accent-[#12A594] shrink-0" />
+              <span className="text-[13px] font-bold text-[#1E2233]">
+                I am {req.childName}&apos;s parent or lawful guardian (18 or older), I have read the notice, and I agree to NCERT Prep using their data for the purposes listed.
+              </span>
+            </label>
+            <div className="flex flex-wrap gap-2.5 pt-1">
+              <button
+                disabled={busy || !agreed}
+                onClick={() => decide('approve')}
+                className="btn-3d [--edge:#0B7A67] px-6 py-3 rounded-2xl bg-[#12A594] text-white text-sm font-extrabold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {busy ? 'Saving…' : 'I agree'}
+              </button>
+              <button disabled={busy} onClick={() => decide('refuse')} className="px-5 py-3 rounded-2xl bg-white border-2 border-[#FFC3B1] text-[#C24A2C] text-sm font-extrabold cursor-pointer">
+                Refuse and delete account
               </button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {!emailVerified && (
-                <p className="p-3 text-xs font-bold text-[#8A5A14] bg-[#FFF6E2] border-2 border-[#FFD97A] rounded-[14px]">
-                  We sent a verification link to {user.email}. Click it, then press Approve.{' '}
-                  <button onClick={() => resendVerification()} className="underline cursor-pointer">Send again</button>
-                </p>
-              )}
-              <p className="text-xs font-bold text-[#6B7280]">Signed in as {user.email}. It must match {req.parentEmail}.</p>
-              {[
-                [guardian, setGuardian, `I am ${req.childName}'s parent or lawful guardian, and I am 18 or older.`],
-                [agreed, setAgreed, `I have read the notice and consent to NCERT Prep using ${req.childName}'s data for the purposes listed.`],
-              ].map(([checked, set, text]) => (
-                <label key={text as string} className="flex items-start gap-3 p-3.5 rounded-[18px] bg-[#F7F8FC] border-2 border-[#E3E5EC] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={checked as boolean}
-                    onChange={(e) => (set as (v: boolean) => void)(e.target.checked)}
-                    className="mt-0.5 w-5 h-5 accent-[#12A594] shrink-0"
-                  />
-                  <span className="text-[13px] font-bold text-[#1E2233]">{text as string}</span>
-                </label>
-              ))}
-              <div className="flex flex-wrap gap-2.5 pt-1">
-                <button
-                  disabled={busy || !guardian || !agreed}
-                  onClick={() => decide('approve')}
-                  className="btn-3d [--edge:#0B7A67] px-6 py-3 rounded-2xl bg-[#12A594] text-white text-sm font-extrabold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {busy ? 'Saving…' : 'Approve'}
-                </button>
-                <button disabled={busy} onClick={() => decide('refuse')} className="px-5 py-3 rounded-2xl bg-white border-2 border-[#FFC3B1] text-[#C24A2C] text-sm font-extrabold cursor-pointer">
-                  Refuse and delete account
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </>
       )}
       {!req && !error && <div className="h-40 rounded-[22px] skeleton-shimmer" aria-label="Loading" />}

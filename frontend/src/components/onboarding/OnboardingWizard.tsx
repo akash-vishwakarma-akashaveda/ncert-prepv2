@@ -19,7 +19,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onCompleted,
   classes,
 }) => {
-  const { user, updateProfile, updateSettings } = useAuth();
+  const { user, updateProfile, updateSettings, applyReferralCode } = useAuth();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
@@ -31,6 +31,9 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [reminderFreq, setReminderFreq] = useState<'daily' | 'weekly'>('weekly');
   const [reminderHourValue, setReminderHourValue] = useState<number | undefined>(undefined);
   const [submitting, setSubmitting] = useState(false);
+  const [referral, setReferral] = useState('');
+  const [city, setCity] = useState('');
+  const [referralError, setReferralError] = useState('');
 
   // The wizard stays mounted, so re-seed from the latest profile each time it opens.
   useEffect(() => {
@@ -43,17 +46,23 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setEnableReminders(Boolean(user?.reminders_enabled));
     setReminderFreq(user?.reminder_frequency || 'weekly');
     setReminderHourValue(user?.reminder_hour);
+    setReferral('');
+    setReferralError('');
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isOpen) return null;
 
   const hasClass = Boolean(user?.grade_preference);
+  // New accounts without a referrer get an optional referral box on the last step.
+  const askReferral = Boolean(user && !user.has_referrer && !user.onboarding_completed);
   const availableSubjects = classes.find((c) => c.class_sort === selectedGrade)?.subjects || [];
   const lessonCount = (grade: string) => classes.find((c) => c.class_sort === grade)?.videoCount || 0;
 
+  // Picking a class is the whole first step, so move straight on (a short pause lets the tile's pressed look show).
   const pickGrade = (grade: string) => {
     setSelectedGrade(grade);
     setSelectedSubjects([]);
+    window.setTimeout(() => setStep((prev) => (prev === 1 ? 2 : prev)), 280);
   };
 
   // Skipping keeps an already-chosen class; a student without a class must pick one first.
@@ -81,12 +90,22 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const handleFinish = async () => {
     setSubmitting(true);
     try {
+      // A referral code can only be added before setup is marked complete, so apply it first.
+      if (user && askReferral && referral.trim()) {
+        try {
+          await applyReferralCode(referral.trim());
+        } catch (err) {
+          setReferralError(err instanceof Error ? err.message : 'That referral code was not found');
+          return;
+        }
+      }
       if (user) {
         await updateProfile({
           grade_preference: selectedGrade,
           study_goal_minutes: dailyGoal,
           focus_subjects: selectedSubjects,
           stream: classHasStreams(selectedGrade) ? selectedStream : '',
+          ...(city.trim() ? { city: city.trim() } : {}),
           onboarding_completed: true,
         });
 
@@ -285,6 +304,50 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 </div>
               ))}
             </dl>
+          )}
+
+          {step === 4 && (
+            <div className="mt-4">
+              <label htmlFor="onboarding-city" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">
+                Your city <span className="font-bold text-[#9AA1B4]">(optional)</span>
+              </label>
+              <input
+                id="onboarding-city"
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                maxLength={80}
+                autoComplete="address-level2"
+                placeholder="e.g. Lucknow"
+                className="w-full px-4 py-3 rounded-2xl border-[3px] border-[#E3E5EC] bg-white text-sm font-bold text-[#1E2233] placeholder:font-semibold placeholder:text-[#9AA1B4] focus:border-[color:var(--brand)] focus:outline-none"
+              />
+            </div>
+          )}
+
+          {step === 4 && askReferral && (
+            <div className="mt-4">
+              <label htmlFor="onboarding-referral" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">
+                Referral code <span className="font-bold text-[#9AA1B4]">(optional)</span>
+              </label>
+              <input
+                id="onboarding-referral"
+                value={referral}
+                onChange={(e) => {
+                  setReferral(e.target.value.toUpperCase());
+                  setReferralError('');
+                }}
+                maxLength={20}
+                autoComplete="off"
+                placeholder="Got one from a friend? Enter it here"
+                aria-invalid={Boolean(referralError)}
+                aria-describedby={referralError ? 'onboarding-referral-error' : undefined}
+                className="w-full px-4 py-3 rounded-2xl border-[3px] border-[#E3E5EC] bg-white text-sm font-bold tracking-[0.06em] text-[#1E2233] placeholder:tracking-normal placeholder:font-semibold placeholder:text-[#9AA1B4] focus:border-[color:var(--brand)] focus:outline-none"
+              />
+              {referralError && (
+                <p id="onboarding-referral-error" role="alert" className="mt-1.5 text-xs font-bold text-[#D14343]">
+                  {referralError}. Fix it or clear the box to continue.
+                </p>
+              )}
+            </div>
           )}
         </div>
 

@@ -8,7 +8,10 @@ export interface BackendUser {
   displayName: string | null;
   photoUrl: string | null;
   phoneNumber: string | null;
+  city?: string | null;
   role: 'STUDENT' | 'ADMIN';
+  hasReferrer?: boolean;
+  referredByCode?: string | null;
   referralCode: string | null;
   classGrade: number | null;
   xp: number;
@@ -45,8 +48,11 @@ export function toFrontendUser(u: BackendUser): User {
     displayName: u.displayName ?? undefined,
     photoURL: u.photoUrl ?? undefined,
     phoneNumber: u.phoneNumber ?? undefined,
+    city: u.city ?? null,
     role: u.role === 'ADMIN' ? 'admin' : 'student',
     referral_code: u.referralCode,
+    has_referrer: Boolean(u.hasReferrer),
+    referred_by_code: u.referredByCode ?? null,
     grade_preference: u.classGrade != null ? normalizeClassSort(u.classGrade) : undefined,
     study_goal_minutes: u.studyGoalMinutes ?? undefined,
     streak_days: u.streak,
@@ -173,6 +179,9 @@ export const AuthService = {
 
   updateProfile: (updates: Record<string, unknown>) => api.patch<BackendUser>('/api/users/me/profile', updates),
   updateSettings: (settings: Record<string, unknown>) => api.patch<BackendUser>('/api/users/me/settings', settings),
+  applyReferralCode: (code: string) => api.post<BackendUser>('/api/users/me/referral', { code }),
+  giveMinorConsent: (body: { ageBand: 'under13' | '13-17'; parentName: string; parentEmail: string; parentPhone: string; language: string }) =>
+    api.post<BackendUser>('/api/users/me/consent/minor', { ...body, agreed: true }),
   giveAdultConsent: (language: string) => api.post<BackendUser>('/api/users/me/consent/adult', { language }),
   requestParentConsent: (parentName: string, parentEmail: string, language: string) =>
     api.post<{ parentEmail: string }>('/api/users/me/consent/parent-request', { parentName, parentEmail, language }),

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import React, { useLayoutEffect, useState } from 'react';
+import { getGradeStage } from './data/stageThemes';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ProgressProvider } from './context/ProgressContext';
 import { DoubtsProvider } from './context/DoubtsContext';
@@ -12,6 +13,7 @@ import { SearchResultsModal } from './components/search/SearchResultsModal';
 import { LandingPage } from './pages/LandingPage';
 import { DemoPage } from './pages/DemoPage';
 import { PrivacyPage } from './pages/PrivacyPage';
+import { SubscribePill } from './components/common/SubscribePill';
 import { ParentConsentPage } from './pages/ParentConsentPage';
 import { ResetPasswordPage, VerifyEmailPage } from './pages/EmailLinkPages';
 import { StudentLayout } from './student/StudentLayout';
@@ -45,9 +47,16 @@ const PublicLayout: React.FC = () => {
   }
 
   const go = (tab: PublicTab) => navigate(PUBLIC_PATHS[tab] || '/');
+  // A lesson page wears the look of its class: Sky garden (1–5), Notebook (6–10) or Focus desk (11–12).
+  const watchId = pathname.match(/^\/watch\/([^/]+)/)?.[1];
+  const watchVideo = watchId ? activeVideos.find((v) => v.youtube_id === decodeURIComponent(watchId)) : undefined;
+  const watchStage = watchVideo ? getGradeStage(watchVideo.class_sort) : undefined;
 
   return (
-    <div className="min-h-screen flex flex-col text-[#1E2233] bg-[#F5F6FA]">
+    <div
+      className={`min-h-screen flex flex-col text-[#1E2233] stage-bg ${watchStage ? 'lesson-stage' : ''}`}
+      data-stage={watchStage}
+    >
       <Navbar
         // Only '/' is 'home': elsewhere the section links must navigate home before scrolling.
         currentTab={pathname === '/' ? 'home' : pathname === '/demo' ? 'demo' : 'privacy'}
@@ -60,6 +69,7 @@ const PublicLayout: React.FC = () => {
         <Outlet context={{ openSearch: () => setSearchOpen(true) }} />
       </main>
       <Footer onNavigate={go} />
+      <SubscribePill />
       <SearchResultsModal
         isOpen={searchOpen}
         onClose={() => setSearchOpen(false)}
@@ -107,9 +117,24 @@ const PrivacyRoute: React.FC = () => {
   return <PrivacyPage onNavigateHome={() => navigate('/')} />;
 };
 
+/**
+ * Every new page opens at the top. Skipped for Back/Forward (the browser keeps the old position), for links to a
+ * section (#features, #explore scroll themselves), and for ?query changes such as subject tabs (same path).
+ */
+const ScrollToTop: React.FC = () => {
+  const { pathname, hash } = useLocation();
+  const navType = useNavigationType();
+  useLayoutEffect(() => {
+    if (navType === 'POP' || hash) return;
+    window.scrollTo(0, 0);
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  return null;
+};
+
 export const App: React.FC = () => (
   <ErrorBoundary>
   <BrowserRouter>
+    <ScrollToTop />
     <AuthProvider>
       <CatalogProvider>
         <ProgressProvider>

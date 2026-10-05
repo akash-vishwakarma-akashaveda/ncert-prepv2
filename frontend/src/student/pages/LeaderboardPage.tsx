@@ -4,7 +4,6 @@ import {
   Trophy,
   Flame,
   Star,
-  Sparkles,
   BookOpenCheck,
   Crown,
   TrendingUp,
@@ -146,7 +145,7 @@ export const LeaderboardPage: React.FC = () => {
           }`}
         >
           {kids && <Trophy aria-hidden="true" className="absolute -right-6 -bottom-8 w-44 h-44 text-white/35 rotate-12" />}
-          <span aria-hidden="true" className="hero-doodles opacity-90" />
+          <span aria-hidden="true" className="hero-doodles opacity-30" />
           <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div className="flex items-center gap-4">
               <div className="relative shrink-0">
@@ -226,7 +225,7 @@ export const LeaderboardPage: React.FC = () => {
         <section aria-label="Top 3 Students Podium" className={`${card} p-5 sm:p-7 overflow-hidden`}>
           <div className="text-center mb-6">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-[#8A5A14] bg-[#FFF1D6] border-2 border-[#FFD97A] px-3 py-1 rounded-full uppercase">
-              <Sparkles className="w-3.5 h-3.5" /> Top Performers · {classLabel(selectedClass)}
+              <Trophy className="w-3.5 h-3.5" /> Top Performers · {classLabel(selectedClass)}
             </span>
           </div>
 

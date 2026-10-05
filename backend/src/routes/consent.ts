@@ -2,7 +2,6 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
 import { eraseUser } from '../shared/erase-user.js';
 
 const router = Router();
@@ -42,7 +41,8 @@ const decideSchema = z.object({
   language: z.enum(['en', 'hi']).default('en'),
 });
 
-router.post('/:token/decide', requireAuth, async (req, res) => {
+// The token was emailed to the parent, so holding it is the proof: no parent account or sign-in is needed.
+router.post('/:token/decide', async (req, res) => {
   const parsed = decideSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -55,17 +55,12 @@ router.post('/:token/decide', requireAuth, async (req, res) => {
   const status = await publicStatus(request);
   if (status !== 'pending') return res.status(409).json({ error: 'This request is no longer pending.', status });
 
-  const parent = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { email: true } });
-  if (!parent || parent.email.toLowerCase() !== (request.user.consentParentEmail ?? '').toLowerCase()) {
-    return res.status(403).json({ error: `Sign in with ${request.user.consentParentEmail} to decide this request.` });
-  }
-
   if (parsed.data.decision === 'approve') {
     if (!parsed.data.declaredGuardian || !parsed.data.agreed) {
       return res.status(400).json({ error: 'Both checkboxes must be confirmed to approve.' });
     }
     await prisma.$transaction([
-      prisma.user.update({ where: { id: request.userId }, data: { consentStatus: 'GRANTED', consentGrantedAt: new Date() } }),
+      prisma.user.update({ where: { id: request.userId }, data: { consentStatus: 'GRANTED', consentMethod: 'parent', consentGrantedAt: new Date() } }),
       prisma.consentRequest.update({ where: { token: request.token }, data: { status: 'GRANTED' } }),
     ]);
     return res.json({ status: 'approved' as PublicStatus });

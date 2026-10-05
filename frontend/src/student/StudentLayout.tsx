@@ -47,6 +47,8 @@ import { useBadgeUnlocks } from './useBadgeUnlocks';
 import { LogoMark } from '../components/common/Logo';
 import { FocusTimer, useFocusTimer } from './useFocusTimer';
 import { FloatingPomodoroWidget } from '../components/pomodoro/FloatingPomodoroWidget';
+import { SubscribeNavButton } from '../components/common/SubscribePill';
+import { GoodiesMarquee } from '../components/common/GoodiesMarquee';
 import { ProgressBar, card, lessonPath, pill } from './ui';
 import { useCourse } from './useCourse';
 import { UserAvatar } from '../data/avatars';
@@ -237,7 +239,7 @@ export const StudentLayout: React.FC = () => {
   // between renders (loading -> signed in on refresh, signed in -> null on logout / log out of all
   // devices), which React treats as a crash and the ErrorBoundary showed "Something went wrong".
   if (loading && !user) {
-    return <div className="min-h-screen flex items-center justify-center text-sm text-[#6B7280]">Loading…</div>;
+    return <div className="min-h-screen stage-bg flex items-center justify-center text-sm text-[#6B7280]">Loading…</div>;
   }
   if (!user) return <Navigate to="/" replace />;
 
@@ -452,7 +454,7 @@ export const StudentLayout: React.FC = () => {
   return (
     <ConsentGate>
     <div
-      className="min-h-screen flex stage-bg text-[#1E2233]"
+      className={`min-h-screen flex stage-bg text-[#1E2233] ${location.pathname.startsWith('/app/lesson/') ? 'lesson-stage' : ''}`}
       data-stage={stage || undefined}
     >
       <aside
@@ -471,7 +473,10 @@ export const StudentLayout: React.FC = () => {
       )}
 
       <div className="flex-1 min-w-0 flex flex-col">
-        <header className="sticky top-0 z-30 bg-[color:var(--chrome)]/90 backdrop-blur border-b-[3px] border-[color:var(--card-line)] flex items-center gap-2.5 sm:gap-3.5 px-4 sm:px-6 py-3">
+        {/* The goodies banner rides with the top bar, so it stays in view while scrolling. */}
+        <div className="sticky top-0 z-30">
+        <GoodiesMarquee />
+        <header className="bg-[color:var(--chrome)]/90 backdrop-blur border-b-[3px] border-[color:var(--card-line)] flex items-center gap-2.5 sm:gap-3.5 px-4 sm:px-6 py-3">
           <button onClick={() => setDrawerOpen(true)} aria-label="Open menu" className="md:hidden p-2 -ml-1 rounded-xl hover:bg-[#F1F3FB] cursor-pointer">
             <Menu className="w-5 h-5" />
           </button>
@@ -516,6 +521,7 @@ export const StudentLayout: React.FC = () => {
                 <span className="text-[11.5px] text-[#12A594]">{xp} XP</span>
               </NavLink>
             )}
+            {!isUserAdmin && <SubscribeNavButton />}
             {/* Notification Bell Icon with Dropdown Flyout Card */}
             <div className="relative">
               <button
@@ -601,8 +607,9 @@ export const StudentLayout: React.FC = () => {
             </div>
           </div>
         </header>
+        </div>
 
-        <main className="flex-1 w-full min-w-0 px-4 sm:px-6 lg:px-8 py-5 sm:py-7 pb-24 md:pb-10">
+        <main className="flex-1 w-full min-w-0 px-4 sm:px-6 lg:px-8 py-5 sm:py-7 pb-40 md:pb-28">
           <Outlet context={{ timer, openSearch: () => setSearchOpen(true) } satisfies StudentOutletContext} />
         </main>
 

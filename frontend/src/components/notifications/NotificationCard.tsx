@@ -8,7 +8,7 @@ import {
   Megaphone,
   Flame,
   Clock,
-  Sparkles,
+  CalendarClock,
   AlertTriangle,
   CheckCircle2,
   ArrowRight,
@@ -165,7 +165,7 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
   targetedAnns.forEach((ann) => {
     const toneIcon =
       ann.tone === 'exam'
-        ? Sparkles
+        ? CalendarClock
         : ann.tone === 'warning'
         ? AlertTriangle
         : ann.tone === 'success'

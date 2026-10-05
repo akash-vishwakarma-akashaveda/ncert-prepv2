@@ -11,12 +11,22 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
 
   componentDidCatch(error: unknown, info: React.ErrorInfo) {
     console.error('Unhandled render error:', error, info.componentStack);
+    // After a deploy, a page loaded before it asks for code files that no longer exist (the admin console is
+    // one, loaded right after an admin signs in). Reload once to pick up the new version; the guard stops a loop.
+    const message = error instanceof Error ? error.message : String(error);
+    if (/dynamically imported module|Importing a module script failed|error loading dynamically/i.test(message)) {
+      const last = Number(sessionStorage.getItem('stale-build-reload') || 0);
+      if (Date.now() - last > 60_000) {
+        sessionStorage.setItem('stale-build-reload', String(Date.now()));
+        window.location.reload();
+      }
+    }
   }
 
   render() {
     if (!this.state.failed) return this.props.children;
     return (
-      <div role="alert" className="min-h-screen flex items-center justify-center p-6 bg-[#F5F6FA]">
+      <div role="alert" className="min-h-screen flex items-center justify-center p-6 stage-bg">
         <div className="max-w-md w-full bg-white rounded-[28px] border-[3px] border-[#EDEFF6] shadow-[0_6px_0_#EDEFF6] p-8 text-center flex flex-col items-center gap-3">
           <LogoMark className="w-14 h-14" />
           <h1 className="text-2xl text-[#1E2233]">Something went wrong</h1>

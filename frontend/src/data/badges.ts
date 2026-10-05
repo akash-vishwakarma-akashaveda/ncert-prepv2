@@ -1,5 +1,5 @@
 import type { ElementType } from 'react';
-import { Star, Flame, Zap, Trophy, MessageCircleQuestion, BookOpenCheck, Bookmark, Rocket, Sparkles } from 'lucide-react';
+import { Star, Flame, Zap, Trophy, MessageCircleQuestion, BookOpenCheck, Bookmark, Rocket, Award } from 'lucide-react';
 import { EducationalStage } from './stageThemes';
 
 export interface BadgeProgress {
@@ -78,7 +78,7 @@ export const BADGES: BadgeDef[] = [
   },
   {
     id: 'level_5',
-    Icon: Sparkles,
+    Icon: Award,
     name: { primary: 'Level 5 Hero', middle: 'Level 5 Scholar', senior: 'Level 5 Strategist' },
     hint: { primary: 'Reach level 5', middle: 'Reach level 5', senior: 'Reach level 5' },
     check: (p) => p.level >= 5,

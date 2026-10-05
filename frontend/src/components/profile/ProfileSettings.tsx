@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   LogOut,
   CheckCircle2,
@@ -10,10 +11,12 @@ import {
   Award,
   Download,
   Check,
-  Sparkles,
+  Smile,
   Gift,
   Copy,
   Share2,
+  ShieldCheck,
+  Ticket,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useProgress } from '../../context/ProgressContext';
@@ -92,6 +95,35 @@ const ReferralCard: React.FC = () => {
   );
 };
 
+type ProfileSection = 'learning' | 'avatar' | 'progress' | 'referrals' | 'privacy';
+const PROFILE_SECTIONS: { id: ProfileSection; label: string; Icon: typeof Gift }[] = [
+  { id: 'learning', label: 'Class & study', Icon: GraduationCap },
+  { id: 'avatar', label: 'Avatar', Icon: Smile },
+  { id: 'progress', label: 'Progress', Icon: Award },
+  { id: 'referrals', label: 'Referrals', Icon: Gift },
+  { id: 'privacy', label: 'Privacy & account', Icon: ShieldCheck },
+];
+
+/** The code this student joined with: they screenshot this card to claim referral goodies. */
+const JoinedWithCard: React.FC<{ code?: string | null }> = ({ code }) => (
+  <div className="bg-white border-[3px] border-[color:var(--card-line)] rounded-[26px] p-5 sm:p-6 flex flex-wrap items-center gap-4">
+    <span className="w-10 h-10 rounded-[14px] bg-[#E7F7F1] text-[#0B7A67] flex items-center justify-center shrink-0">
+      <Ticket className="w-5 h-5" />
+    </span>
+    <div className="flex-1 min-w-[200px]">
+      <h3 className="text-base font-extrabold text-[#1E2233]">Referral you joined with</h3>
+      <p className="text-xs text-[#6B7280]">
+        {code ? 'Take a screenshot of this card and send it to us to claim your referral goodies.' : 'You did not use a referral code when you joined.'}
+      </p>
+    </div>
+    {code && (
+      <span className="px-4 py-2.5 rounded-[16px] bg-[#E7F7F1] border-2 border-dashed border-[#A9E6D3] font-display text-lg tracking-[0.08em] text-[#0B7A67]">
+        {code}
+      </span>
+    )}
+  </div>
+);
+
 interface ProfileSettingsProps {
   videoMap: Map<string, Video>;
   onOpenAdmin?: () => void;
@@ -103,6 +135,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
 }) => {
   const { user, isAdmin, signOut, signOutAllDevices, updateProfile, deleteAccount, reauthProviderId, reauthenticate } = useAuth();
   const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const section = (PROFILE_SECTIONS.find((t) => t.id === params.get('section'))?.id ?? 'learning') as ProfileSection;
+  const setSection = (id: ProfileSection) => setParams((p) => { const next = new URLSearchParams(p); next.set('section', id); return next; }, { replace: true });
   const {
     completedCount,
     favoritesCount,
@@ -124,6 +159,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   const [profileUpdated, setProfileUpdated] = useState(false);
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [city, setCity] = useState(user?.city || '');
   const [selectedGrade, setSelectedGrade] = useState(user?.grade_preference || '');
   const [studyGoal, setStudyGoal] = useState<number>(user?.study_goal_minutes || 25);
   const [focusSubjects, setFocusSubjects] = useState<string[]>(user?.focus_subjects || []);
@@ -174,6 +210,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       const updatedUser = {
         ...user,
         displayName: displayName.trim() || user.displayName,
+        city: city.trim(),
         grade_preference: selectedGrade,
         study_goal_minutes: studyGoal,
         focus_subjects: focusSubjects.filter((s) => subjectsForSelectedGrade.includes(s)),
@@ -182,6 +219,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
       };
       await updateProfile({
         displayName: displayName.trim() || user.displayName,
+        city: city.trim(),
         grade_preference: selectedGrade,
         study_goal_minutes: studyGoal,
         focus_subjects: focusSubjects.filter((s) => subjectsForSelectedGrade.includes(s)),
@@ -359,15 +397,39 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         </div>
       </div>
 
-      {/* Referral Code */}
-      {!isAdmin && <ReferralCard />}
+      {/* Sub-navigation: one part of the profile at a time, so the page stays short. */}
+      <nav aria-label="Profile sections" className="sticky top-[76px] z-20 -mx-1 px-1 py-1 overflow-x-auto">
+        <div role="tablist" className="inline-flex gap-1.5 p-1.5 rounded-[20px] bg-white border-[3px] border-[color:var(--card-line)] shadow-[0_4px_0_var(--card-line)]">
+          {PROFILE_SECTIONS.filter((t) => !(isAdmin && t.id === 'referrals')).map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={section === t.id}
+              onClick={() => setSection(t.id)}
+              className={`flex items-center gap-1.5 whitespace-nowrap px-3.5 py-2 rounded-[14px] text-[13px] font-extrabold cursor-pointer transition-colors ${
+                section === t.id ? 'bg-[color:var(--brand)] text-white' : 'text-[#4B5168] hover:bg-[color:var(--brand-soft)]'
+              }`}
+            >
+              <t.Icon className="w-4 h-4" /> {t.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {section === 'referrals' && !isAdmin && (
+        <>
+          <JoinedWithCard code={user.referred_by_code} />
+          <ReferralCard />
+        </>
+      )}
 
       {/* Choose Your Cute Study Avatar */}
+      {section === 'avatar' && (
       <section aria-label="Choose your avatar" className="bg-white border-[3px] border-[color:var(--card-line)] rounded-[26px] p-5 sm:p-6 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3">
             <span className="w-10 h-10 rounded-[14px] bg-[#FFF0CF] text-[#B87A06] flex items-center justify-center font-display border border-[#FFD97A]">
-              <Sparkles className="w-5 h-5" />
+              <Smile className="w-5 h-5" />
             </span>
             <div>
               <h2 className="text-lg font-display text-[#1E2233]">Choose your avatar</h2>
@@ -427,8 +489,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           })}
         </div>
       </section>
+      )}
 
       {/* XP Credit History & Ledger */}
+      {section === 'progress' && (
       <XpHistoryCard
         totalXp={totalXp}
         level={level}
@@ -437,8 +501,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
         history={xpHistory}
         activeClass={user.grade_preference || selectedGrade}
       />
+      )}
 
       {/* Academic Target & Grade Preferences */}
+      {section === 'learning' && (
       <form onSubmit={handleSaveAcademicPreferences} className="bg-white border-[3px] border-[color:var(--card-line)] rounded-[26px] p-5 sm:p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -471,6 +537,22 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               value={displayName}
               maxLength={60}
               onChange={(e) => setDisplayName(e.target.value)}
+              className="w-full px-3.5 py-2.5 text-sm font-bold border-2 border-[#E3E5EC] rounded-2xl bg-[#F7F8FC] focus:bg-white focus:border-[color:var(--brand)] outline-none"
+            />
+          </div>
+
+          <div className="max-w-md">
+            <label htmlFor="profile-city" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">
+              City <span className="font-bold text-[#9AA1B4]">(optional)</span>
+            </label>
+            <input
+              id="profile-city"
+              type="text"
+              value={city}
+              maxLength={80}
+              autoComplete="address-level2"
+              placeholder="e.g. Lucknow"
+              onChange={(e) => setCity(e.target.value)}
               className="w-full px-3.5 py-2.5 text-sm font-bold border-2 border-[#E3E5EC] rounded-2xl bg-[#F7F8FC] focus:bg-white focus:border-[color:var(--brand)] outline-none"
             />
           </div>
@@ -599,8 +681,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           </button>
         </div>
       </form>
+      )}
 
       {/* Account Deletion & DPDP Data Rights (NFR-1 & NFR-11) */}
+      {section === 'privacy' && (
       <div className="bg-white border-[3px] border-[color:var(--card-line)] rounded-[26px] p-5 sm:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="space-y-1">
@@ -660,6 +744,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (

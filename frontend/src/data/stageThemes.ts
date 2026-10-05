@@ -21,7 +21,7 @@ export const STAGE_CONFIGS: Record<EducationalStage, StageThemeConfig> = {
     stage: 'primary',
     label: 'Primary Foundation (Class 1–5)',
     badge: 'Foundation Learning',
-    iconName: 'Sparkles',
+    iconName: 'Sun',
     greeting: 'Welcome to your learning adventure!',
     subGreeting: 'Build core fundamentals with bite-sized, structured video lessons.',
     cardRadius: 'rounded-2xl',
@@ -53,7 +53,7 @@ export const STAGE_CONFIGS: Record<EducationalStage, StageThemeConfig> = {
     badge: 'High-Yield Intensive',
     iconName: 'GraduationCap',
     greeting: 'Targeted Concept Sprint & Entrance Readiness',
-    subGreeting: 'High-yield one-shot lectures, formula cheat sheets, and PYQ alignment.',
+    subGreeting: 'High-yield one-shot lectures, revision notes, and PYQ alignment.',
     cardRadius: 'rounded-xl',
     accentGradient: 'from-slate-900 via-indigo-950 to-blue-900',
     primaryColor: '#1E293B', // Slate 800
@@ -101,7 +101,7 @@ export const CLASS_CARD_STYLES: Record<string, ClassCardStyle> = {
   '01': {
     class_sort: '01',
     class_display: 'Class 1',
-    iconName: 'Sparkles',
+    iconName: 'Sun',
     bgGradient: 'from-[#FFE4E6] to-[#FED7AA]',
     border: '#FCA5A5',
     textColor: '#881337',

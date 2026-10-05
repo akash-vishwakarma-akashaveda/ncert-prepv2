@@ -31,7 +31,17 @@ export interface ContentAccessPolicy {
   allowGuestNotes: boolean;
 }
 
+/** Referral goodies offer: while on, a scrolling banner tops every public and student page. */
+export interface ReferralGoodies {
+  enabled: boolean;
+  /** The banner's main line. */
+  message: string;
+  /** How to claim, shown after the message. */
+  claimHow: string;
+}
+
 export interface StudentDashboardConfig {
+  goodies: ReferralGoodies;
   announcements: DashboardAnnouncement[];
   spotlights: Record<string, SpotlightLesson>; // classSort -> SpotlightLesson
   policy: ContentAccessPolicy;
@@ -40,7 +50,14 @@ export interface StudentDashboardConfig {
 const KEY = 'student_dashboard';
 
 // Every project starts empty: nothing is shown to students until an admin publishes it.
+export const DEFAULT_GOODIES: ReferralGoodies = {
+  enabled: false,
+  message: 'Refer your friends to NCERT Prep and win goodies!',
+  claimHow: 'Screenshot the "Referral you joined with" card in your profile and send it to us to claim.',
+};
+
 const EMPTY_CONFIG: StudentDashboardConfig = {
+  goodies: DEFAULT_GOODIES,
   announcements: [],
   spotlights: {},
   policy: { freePreviewEnabled: true, freePreviewCount: 1, allowGuestNotes: false },
@@ -49,7 +66,7 @@ const EMPTY_CONFIG: StudentDashboardConfig = {
 // Older configs stored a single `announcement` slot instead of a list — fold it in so it isn't lost.
 function merge(raw: (Partial<StudentDashboardConfig> & { announcement?: DashboardAnnouncement | null }) | null | undefined): StudentDashboardConfig {
   const announcements = raw?.announcements ?? (raw?.announcement ? [raw.announcement] : []);
-  return { ...EMPTY_CONFIG, ...raw, announcements, policy: { ...EMPTY_CONFIG.policy, ...raw?.policy } };
+  return { ...EMPTY_CONFIG, ...raw, announcements, policy: { ...EMPTY_CONFIG.policy, ...raw?.policy }, goodies: { ...DEFAULT_GOODIES, ...raw?.goodies } };
 }
 
 export const DashboardControlService = {
@@ -69,6 +86,11 @@ export const DashboardControlService = {
       // Surface it: the admin must not see "saved" when students will never get the change.
       throw new Error(`Could not publish to students: ${(err as Error).message || 'request failed'}`);
     }
+  },
+
+  async updateGoodies(goodies: ReferralGoodies): Promise<void> {
+    const cfg = await this.getConfig();
+    await this.saveConfig({ ...cfg, goodies });
   },
 
   async createAnnouncement(input: Omit<DashboardAnnouncement, 'id' | 'createdAt'>): Promise<DashboardAnnouncement> {

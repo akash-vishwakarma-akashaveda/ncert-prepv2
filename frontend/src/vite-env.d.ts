@@ -4,6 +4,7 @@ interface ImportMetaEnv {
   readonly VITE_API_URL?: string;
   readonly VITE_GOOGLE_CLIENT_ID?: string;
   readonly VITE_GRIEVANCE_OFFICER_NAME?: string;
+  readonly VITE_YOUTUBE_CHANNEL_URL?: string;
   readonly VITE_GRIEVANCE_EMAIL?: string;
 }
 

@@ -13,6 +13,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Gift,
 } from 'lucide-react';
 import { Video } from '../../types';
 import {
@@ -20,8 +21,11 @@ import {
   StudentDashboardConfig,
   DashboardAnnouncement,
   SpotlightLesson,
+  ReferralGoodies,
+  DEFAULT_GOODIES,
 } from '../../services/dashboardControl';
 import { AdminClassNode } from './adminTree';
+import { GoodiesStrip } from '../../components/common/GoodiesMarquee';
 import { Card, SectionHeader, inputClass, primaryButton, secondaryButton, Notify } from './adminUi';
 import { classLabel } from '../../data/gamification';
 
@@ -31,7 +35,7 @@ interface StudentControlSectionProps {
   notify: Notify;
 }
 
-type SubTab = 'announcement' | 'spotlight' | 'policy' | 'simulator';
+type SubTab = 'announcement' | 'spotlight' | 'policy' | 'goodies' | 'simulator';
 
 export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
   tree,
@@ -86,6 +90,9 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
   const [previewCount, setPreviewCount] = useState(1);
   const [guestNotes, setGuestNotes] = useState(false);
 
+  // Referral goodies banner
+  const [goodies, setGoodies] = useState<ReferralGoodies>(DEFAULT_GOODIES);
+
   // Simulator State
   const [simClass, setSimClass] = useState('10');
 
@@ -96,6 +103,7 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
       setPreviewEnabled(cfg.policy.freePreviewEnabled);
       setPreviewCount(cfg.policy.freePreviewCount);
       setGuestNotes(cfg.policy.allowGuestNotes);
+      setGoodies(cfg.goodies);
     });
   }, []);
 
@@ -235,6 +243,19 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
     }
   };
 
+  const handleSaveGoodies = async () => {
+    setSaving(true);
+    try {
+      await DashboardControlService.updateGoodies(goodies);
+      setConfig((prev) => (prev ? { ...prev, goodies } : null));
+      notify(goodies.enabled ? 'Referral goodies banner is live!' : 'Referral goodies banner is switched off.', 'success');
+    } catch (err) {
+      notify((err as Error).message || 'Failed to save the goodies banner.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Tone badge styles — matches the student banner (HomePage TONES): navy for Class 6–12;
   // Class 1–5 get a sunny note instead.
   const TONE_STYLES: Record<'exam' | 'info' | 'success' | 'warning', string> = {
@@ -273,6 +294,7 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
           { id: 'announcement', label: 'Broadcast Announcements', icon: Megaphone },
           { id: 'spotlight', label: 'Daily Spotlight Lessons', icon: Star },
           { id: 'policy', label: 'Content Access & Preview Policy', icon: Lock },
+          { id: 'goodies', label: 'Referral Goodies', icon: Gift },
           { id: 'simulator', label: 'Live Dashboard Simulator', icon: Eye },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -708,6 +730,70 @@ export const StudentControlSection: React.FC<StudentControlSectionProps> = ({
                 {saving ? 'Saving...' : 'Save Access Policy'}
               </button>
             </div>
+          </Card>
+        </div>
+      )}
+
+      {/* REFERRAL GOODIES TAB */}
+      {subTab === 'goodies' && (
+        <div className="max-w-2xl space-y-6">
+          <Card className="p-6 space-y-5">
+            <div className="border-b border-[#E3E5EC] pb-3">
+              <h3 className="text-base font-extrabold text-[#1E2233]">Referral Goodies</h3>
+              <p className="text-xs text-[#6B7280]">
+                While this is on, a scrolling banner sits on top of every public page and every student page. Students
+                claim by screenshotting the "Referral you joined with" card in Profile → Referrals.
+              </p>
+            </div>
+
+            <label className="flex items-center justify-between gap-4 p-4 bg-[#F5F6FA] rounded-[22px] border-2 border-[#E3E5EC] cursor-pointer">
+              <span>
+                <span className="block text-sm font-extrabold text-[#1E2233]">Show the goodies banner</span>
+                <span className="block text-xs text-[#6B7280]">Off: the banner is hidden everywhere.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={goodies.enabled}
+                onChange={(e) => setGoodies((g) => ({ ...g, enabled: e.target.checked }))}
+                className="rounded text-[#3B4FE0] focus:ring-[#3B4FE0]"
+              />
+            </label>
+
+            <div className="space-y-1.5">
+              <label htmlFor="goodies-message" className="text-sm font-extrabold text-[#1E2233]">Banner message</label>
+              <input
+                id="goodies-message"
+                value={goodies.message}
+                maxLength={140}
+                onChange={(e) => setGoodies((g) => ({ ...g, message: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="goodies-claim" className="text-sm font-extrabold text-[#1E2233]">How to claim</label>
+              <input
+                id="goodies-claim"
+                value={goodies.claimHow}
+                maxLength={180}
+                onChange={(e) => setGoodies((g) => ({ ...g, claimHow: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-extrabold text-[#6B7280]">PREVIEW</p>
+              <div className="rounded-[14px] overflow-hidden border-2 border-[#E3E5EC]">
+                <GoodiesStrip
+                  goodies={goodies}
+                  action={<span className="inline-flex px-3 py-1 rounded-full bg-[#1E2233] text-white text-[12px] font-extrabold">My referral code</span>}
+                />
+              </div>
+            </div>
+
+            <button onClick={handleSaveGoodies} disabled={saving || !goodies.message.trim()} className={`${primaryButton} w-full py-3`}>
+              {saving ? 'Saving...' : 'Save Goodies Banner'}
+            </button>
           </Card>
         </div>
       )}

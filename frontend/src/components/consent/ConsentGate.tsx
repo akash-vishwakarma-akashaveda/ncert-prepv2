@@ -59,7 +59,7 @@ export const NoticeView: React.FC<{ lang: NoticeLang; onLang?: (l: NoticeLang) =
 };
 
 const Shell: React.FC<{ icon: React.ReactNode; title: string; body: string; children: React.ReactNode }> = ({ icon, title, body, children }) => (
-  <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-[color:var(--brand-soft)] to-[color:var(--page)]">
+  <div className="min-h-screen flex items-center justify-center p-4 stage-bg">
     <div className="w-full max-w-[620px] bg-white rounded-[32px] border-[3px] border-[color:var(--card-line)] shadow-[0_8px_0_#E3E5EC] p-6 sm:p-8 space-y-4 animate-pop-soft">
       <span className="w-12 h-12 rounded-[16px] bg-[#12A594] shadow-[0_4px_0_#0B7A67] text-white flex items-center justify-center">{icon}</span>
       <div className="space-y-1.5">
@@ -83,14 +83,15 @@ const input = 'w-full px-4 py-3 text-sm font-bold border-2 border-[#E3E5EC] roun
  */
 export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const {
-    user, emailVerified, resendVerification, refreshEmailVerified, giveAdultConsent, requestParentConsent,
+    user, emailVerified, resendVerification, refreshEmailVerified, giveAdultConsent, giveMinorConsent, requestParentConsent,
     signOut, deleteAccount,
   } = useAuth();
   const [lang, setLang] = useState<NoticeLang>(user?.consent?.language || 'en');
-  const [age, setAge] = useState<'adult' | 'child' | null>(null);
+  const [age, setAge] = useState<'adult' | 'under13' | '13-17' | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [parentName, setParentName] = useState('');
   const [parentEmail, setParentEmail] = useState('');
+  const [parentPhone, setParentPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -188,7 +189,7 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
           >
             Send the email again
           </button>
-          <button onClick={() => { setChanging(true); setAge('child'); setParentName(user.consent?.parent_name || ''); }} className={quiet}>
+          <button onClick={() => { setChanging(true); setAge('13-17'); setParentName(user.consent?.parent_name || ''); }} className={quiet}>
             Use a different email
           </button>
         </div>
@@ -203,10 +204,11 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
 
       <fieldset className="space-y-2">
         <legend className="text-xs font-extrabold text-[#1E2233] mb-1.5">{lang === 'en' ? 'How old are you?' : 'आपकी उम्र क्या है?'}</legend>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-3 gap-2.5">
           {([
-            ['adult', lang === 'en' ? 'I am 18 or older' : 'मेरी उम्र 18 या अधिक है'],
-            ['child', lang === 'en' ? 'I am under 18' : 'मेरी उम्र 18 से कम है'],
+            ['under13', lang === 'en' ? 'Under 13' : '13 से कम'],
+            ['13-17', lang === 'en' ? '13 to 17' : '13 से 17'],
+            ['adult', lang === 'en' ? '18 or older' : '18 या अधिक'],
           ] as const).map(([value, text]) => (
             <button
               key={value}
@@ -246,35 +248,53 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
         </div>
       )}
 
-      {age === 'child' && (
+      {(age === 'under13' || age === '13-17') && (
         <form
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             run(async () => {
-              await requestParentConsent(parentName.trim(), parentEmail.trim(), lang);
+              await giveMinorConsent({
+                ageBand: age,
+                parentName: parentName.trim(),
+                parentEmail: parentEmail.trim(),
+                parentPhone: parentPhone.trim(),
+                language: lang,
+              });
               setChanging(false);
             });
           }}
         >
           <p className="text-[13px] font-semibold text-[#4B5168]">
             {lang === 'en'
-              ? "The law requires your parent or guardian to approve before we use your data. We'll email them a link; nothing else happens until they decide."
-              : 'कानून के अनुसार आपके डेटा का उपयोग करने से पहले माता-पिता या अभिभावक की स्वीकृति ज़रूरी है। हम उन्हें एक लिंक ईमेल करेंगे; उनके निर्णय तक कुछ और नहीं होगा।'}
+              ? "Add your parent or guardian's details. You can start learning right away, and we'll send them a quick note to confirm."
+              : 'अपने माता-पिता या अभिभावक की जानकारी दें। आप तुरंत पढ़ाई शुरू कर सकते हैं, और हम उन्हें पुष्टि के लिए एक छोटा संदेश भेजेंगे।'}
           </p>
-          <div className="grid sm:grid-cols-2 gap-3">
+          <div className="grid sm:grid-cols-3 gap-3">
             <div>
-              <label htmlFor="parent-name" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">{lang === 'en' ? "Parent or guardian's name" : 'माता-पिता/अभिभावक का नाम'}</label>
-              <input id="parent-name" value={parentName} onChange={(e) => setParentName(e.target.value)} maxLength={80} className={input} required />
+              <label htmlFor="parent-name" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">{lang === 'en' ? "Parent's name" : 'माता-पिता का नाम'}</label>
+              <input id="parent-name" value={parentName} onChange={(e) => setParentName(e.target.value)} maxLength={80} autoComplete="off" className={input} required />
             </div>
             <div>
-              <label htmlFor="parent-email" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">{lang === 'en' ? 'Their email address' : 'उनका ईमेल पता'}</label>
+              <label htmlFor="parent-phone" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">{lang === 'en' ? 'Phone number' : 'फ़ोन नंबर'}</label>
+              <input id="parent-phone" type="tel" inputMode="tel" value={parentPhone} onChange={(e) => setParentPhone(e.target.value)} maxLength={20} placeholder="+91 98765 43210" className={input} required />
+            </div>
+            <div>
+              <label htmlFor="parent-email" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">{lang === 'en' ? 'Email address' : 'ईमेल पता'}</label>
               <input id="parent-email" type="email" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} className={input} required />
             </div>
           </div>
+          <label className="flex items-start gap-3 p-3.5 rounded-[18px] bg-[#F7F8FC] border-2 border-[#E3E5EC] cursor-pointer">
+            <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 w-5 h-5 accent-[#12A594] shrink-0" />
+            <span className="text-[13px] font-bold text-[#1E2233]">
+              {lang === 'en'
+                ? 'My parent or guardian knows I am using NCERT Prep and agrees to the privacy notice above.'
+                : 'मेरे माता-पिता या अभिभावक जानते हैं कि मैं NCERT Prep का उपयोग कर रहा/रही हूँ और ऊपर दी गई गोपनीयता सूचना से सहमत हैं।'}
+            </span>
+          </label>
           <div className="flex flex-wrap gap-2.5">
-            <button type="submit" disabled={busy || !parentName.trim() || !parentEmail.trim()} className={primary}>
-              {busy ? 'Sending…' : lang === 'en' ? 'Email my parent' : 'माता-पिता को ईमेल भेजें'}
+            <button type="submit" disabled={busy || !agreed || !parentName.trim() || !parentEmail.trim() || !parentPhone.trim()} className={primary}>
+              {busy ? 'Saving…' : lang === 'en' ? 'Continue' : 'आगे बढ़ें'}
             </button>
             {changing && (
               <button type="button" onClick={() => setChanging(false)} className={quiet}>

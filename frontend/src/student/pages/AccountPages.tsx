@@ -155,7 +155,7 @@ export const FocusPage: React.FC = () => {
             <span className="sr-only">What are you studying?</span>
             <input
               type="text"
-              placeholder="What are you studying? e.g. Chapter 4 notes"
+              placeholder="What are you studying? e.g. Chapter 4 revision"
               value={timer.currentTask}
               onChange={(e) => timer.setCurrentTask(e.target.value)}
               className="w-full px-4 py-3 rounded-2xl bg-[color:var(--page)] border-2 border-[color:var(--card-line)] text-sm font-bold text-[#1E2233] placeholder:text-[#9AA1B4] focus:bg-white focus:border-[color:var(--brand)] outline-none transition-colors"

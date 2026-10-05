@@ -109,7 +109,7 @@ export const ChapterNotesContent: React.FC<{ notes: ChapterNotes | null; loading
         <FileText className="w-8 h-8 mx-auto text-slate-400" />
         <p className="text-sm font-bold text-[#1E2233]">No notes for this chapter yet</p>
         <p className="text-xs text-[#6B7280]">
-          Your educator hasn&apos;t published notes or a cheat sheet for this chapter. Check back later.
+          Your educator hasn&apos;t published notes for this chapter. Check back later.
         </p>
       </div>
     ) : (
@@ -169,7 +169,7 @@ export const ChapterNotesContent: React.FC<{ notes: ChapterNotes | null; loading
           <section className="space-y-2">
             <h4 className="text-xs font-extrabold uppercase tracking-wider text-[#1E2233] flex items-center gap-1.5">
               <Paperclip className="w-4 h-4 text-[#6B7280]" />
-              Cheat sheets & downloads
+              Downloads
             </h4>
             {notes.attachments.map((a) => (
               <AttachmentRow key={a.path} attachment={a} />

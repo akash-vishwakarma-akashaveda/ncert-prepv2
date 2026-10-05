@@ -62,7 +62,9 @@
   --brand-line: #C7CDF8;
   --brand-to: #6B7BF0;
   --page: #F5F6FA;
-  --page-bg: var(--page);
+  /* Cream paper with hand-drawn study doodles, the same for every class. */
+  /* Softer tile than the landing bands: the dashboard's cards and text must stay the focus. */
+  --page-bg: url('/backgrounds/doodles-tile-soft.svg') 0 0 / 760px repeat, #FBF6EA;
   --chrome: #FFFFFF;
   --card-line: #EDEFF6;
   --card-r: 24px;
@@ -81,17 +83,12 @@
   --brand-line: #D9CCFB;
   --brand-to: #C36BE8;
   --page: #FFF8EC;
-  --page-bg: url('/doodles/primary-confetti.svg') 0 0 / 280px repeat, linear-gradient(180deg, #E3F3FF 0, #FFF8EC 480px) #FFF8EC;
   --chrome: #FFFDF8;
   --card-line: #F2E3C4;
   --card-r: 30px;
 }
 [data-stage='middle'] {
   --page: #F4F7FF;
-  --page-bg:
-    linear-gradient(rgba(59, 79, 224, 0.05) 1px, transparent 1px) 0 0 / 28px 28px,
-    linear-gradient(90deg, rgba(59, 79, 224, 0.05) 1px, transparent 1px) 0 0 / 28px 28px,
-    #F4F7FF;
   --doodles: url('/doodles/middle.svg');
   --doodle-size: 360px;
 }
@@ -110,6 +107,15 @@
   --doodle-size: 420px;
 }
 .stage-bg { background: var(--page-bg); }
+/* Lesson pages wear their class's look: Class 1–5 keeps the app's cream doodle paper (it matches the kids sidebar
+   and header); Class 6–10 gets notebook graph paper and Class 11–12 a plain desk. */
+[data-stage='middle'].lesson-stage {
+  background:
+    linear-gradient(rgba(59, 79, 224, 0.07) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(90deg, rgba(59, 79, 224, 0.07) 1px, transparent 1px) 0 0 / 28px 28px,
+    #F4F7FF;
+}
+[data-stage='senior'].lesson-stage { background: #EEF0F4; }
 .stage-chrome { background-color: var(--chrome); }
 
 /* Doodles printed in white inside banners. Only middle / senior define --doodles; without it the mask
@@ -399,15 +405,91 @@ body {
   .animate-confetti, .animate-badge-ring { animation: none; }
 }
 
-/* Landing (playful & bold): an indigo hero sprinkled with confetti dots, sticker shapes on top. */
+/* Landing and demo hero: cream paper with doodles down both sides, so the middle stays clear for text. */
 .landing-hero {
   isolation: isolate;
-  background:
-    radial-gradient(40rem 26rem at 88% 8%, rgba(139, 108, 240, 0.55), transparent 65%),
-    radial-gradient(34rem 24rem at 4% 96%, rgba(18, 165, 148, 0.45), transparent 65%),
-    #3B4FE0;
+  background: url('/backgrounds/doodles-wide.svg') center / cover no-repeat, #FBF6EA;
 }
-.landing-hero::before,
+@media (max-width: 639px) {
+  .landing-hero {
+    background:
+      radial-gradient(ellipse 22rem 18rem at 50% 32%, #FBF6EA 45%, rgba(251, 246, 234, 0) 78%),
+      url('/backgrounds/doodles-portrait.svg') center top / cover no-repeat,
+      #FBF6EA;
+  }
+}
+/* Home page parallax: one fixed doodle wallpaper; the hero is see-through and the sections float over it as panels. */
+.landing-fixed-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url('/backgrounds/doodles-wide.svg') center / cover no-repeat;
+  /* Texture, not decoration: faded so the hero copy and card stay the focus. */
+  opacity: 0.28;
+}
+@media (max-width: 639px) {
+  .landing-fixed-bg { background: url('/backgrounds/doodles-portrait.svg') center / cover no-repeat; opacity: 0.2; }
+}
+/* Text sits on the left of the hero, so the wallpaper fades out behind it (the fade scrolls with the text). */
+.landing-hero-split {
+  background: radial-gradient(ellipse 34rem 26rem at 24% 52%, #FBF6EA 45%, rgba(251, 246, 234, 0) 75%);
+}
+@media (max-width: 639px) {
+  .landing-hero-split { background: radial-gradient(ellipse 22rem 20rem at 50% 30%, #FBF6EA 45%, rgba(251, 246, 234, 0) 78%); }
+}
+.landing-panel {
+  position: relative;
+  width: min(100% - 24px, 1360px);
+  margin: 0 auto 36px;
+  border-radius: 40px;
+  overflow: hidden;
+  box-shadow: 0 24px 60px -34px rgba(30, 34, 51, 0.45), 0 0 0 3px rgba(255, 255, 255, 0.7);
+}
+@media (min-width: 640px) {
+  .landing-panel { width: min(100% - 48px, 1360px); margin-bottom: 56px; border-radius: 48px; }
+}
+/* Demo hero: text is centred, so the wallpaper fades out behind the middle. */
+.landing-hero-center { background: radial-gradient(ellipse 38rem 22rem at 50% 45%, #FBF6EA 45%, rgba(251, 246, 234, 0) 78%); }
+@media (max-width: 639px) {
+  .landing-hero-center { background: radial-gradient(ellipse 22rem 22rem at 50% 40%, #FBF6EA 45%, rgba(251, 246, 234, 0) 80%); }
+}
+/* Home page hero (the committed design): indigo sprinkled with confetti dots, sticker shapes on top. */
+.landing-hero-indigo {
+  isolation: isolate;
+  background: #3B4FE0;
+}
+/* Wavy section edges. The curve is cut into the TOP of the lower section (.wave-top), which slides up over the
+   section above; so the lower section's own background, doodles and dots included, fills the curve and nothing has
+   to be colour-matched. The section above gets the matching room at its bottom (.wave-above). */
+.wave-top,
+.wave-top-flip {
+  --wave-h: 40px;
+  margin-top: calc(var(--wave-h) * -1);
+  padding-top: var(--wave-h);
+  -webkit-mask: var(--wave-mask) top / 100% var(--wave-h) no-repeat, linear-gradient(#000, #000) 0 var(--wave-h) / 100% calc(100% - var(--wave-h)) no-repeat;
+  mask: var(--wave-mask) top / 100% var(--wave-h) no-repeat, linear-gradient(#000, #000) 0 var(--wave-h) / 100% calc(100% - var(--wave-h)) no-repeat;
+}
+.wave-top { --wave-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 80' preserveAspectRatio='none'%3E%3Cpath d='M0 44C180 8 360 8 540 36s360 44 540 20S1320 4 1440 28V80H0Z'/%3E%3C/svg%3E"); }
+.wave-top-flip { --wave-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 80' preserveAspectRatio='none'%3E%3Cg transform='translate(1440 0) scale(-1 1)'%3E%3Cpath d='M0 44C180 8 360 8 540 36s360 44 540 20S1320 4 1440 28V80H0Z'/%3E%3C/g%3E%3C/svg%3E"); }
+.wave-above { padding-bottom: 40px; }
+@media (min-width: 640px) {
+  .wave-top, .wave-top-flip { --wave-h: 64px; }
+  .wave-above { padding-bottom: 64px; }
+}
+/* Faint study doodles behind the plain home page bands, so they are not flat blocks of colour. */
+.section-doodles { isolation: isolate; }
+.section-doodles::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: url('/backgrounds/doodles-tile.svg') 0 0 / 760px repeat;
+  opacity: 0.35;
+}
+/* Confetti dots on the indigo hero and the closing call-to-action band. */
+.landing-hero-indigo::before,
 .landing-confetti::before {
   content: '';
   position: absolute;
@@ -452,21 +534,51 @@ body {
 }
 .fun-tile:hover .fun-tile-icon { transform: rotate(6deg) scale(1.08); }
 
-/* Landing class cards: flat pastel card, big roman numeral, playful hover. */
+/* Roman numerals as puffy balloon letters (every class button): a dark extruded layer, a solid face in the class
+   colour fattened with a same-colour stroke, and a lighter highlight over the top half. Flat colours, no gradients. */
+.numeral-3d {
+  --deep: color-mix(in srgb, var(--ink) 62%, #1E2233);
+  --lite: color-mix(in srgb, var(--ink) 45%, #fff);
+  position: relative;
+  display: inline-block;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.1em;
+}
+.numeral-3d > span { -webkit-text-stroke: 0.045em var(--ink); paint-order: stroke fill; }
+.numeral-3d-depth {
+  position: absolute;
+  inset: 0;
+  color: var(--deep);
+  -webkit-text-stroke-color: var(--deep) !important;
+  transform: translateY(0.07em);
+  filter: drop-shadow(0 0.08em 0.06em rgba(30, 34, 51, 0.25));
+}
+.numeral-3d-face { position: relative; color: var(--ink); }
+.numeral-3d-shine {
+  position: absolute;
+  inset: 0;
+  color: var(--lite);
+  -webkit-text-stroke-color: var(--lite) !important;
+  clip-path: inset(0 0 56% 0);
+  opacity: 0.85;
+}
+/* Landing class cards: pastel tile with a ledge, balloon numeral in a white badge, playful hover. */
 .class-card {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   width: 100%;
-  aspect-ratio: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 0.15rem;
+  padding: 14px 8px 12px;
   border-radius: 26px;
-  border: 2px solid var(--line);
+  border: 3px solid var(--line);
   background: var(--bg);
+  box-shadow: 0 6px 0 var(--line);
   cursor: pointer;
   transition: transform 0.35s cubic-bezier(0.3, 1.5, 0.5, 1), box-shadow 0.35s ease, border-color 0.2s;
 }
@@ -478,9 +590,21 @@ body {
   outline: none;
 }
 .class-card:focus-visible { box-shadow: 0 0 0 4px #FFC53D; }
+/* White circle the numeral sits in, like a sticker on the tile. */
+.class-card-badge {
+  position: relative;
+  width: min(78px, 62%);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 4px 0 var(--line);
+}
+.class-card-sm .class-card-badge { width: min(46px, 54%); }
 .class-card-roman {
   position: relative;
-  font-size: clamp(30px, 7vw, 44px);
+  font-size: clamp(20px, 3.8vw, 31px);
   line-height: 1;
   color: var(--ink);
   transition: transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1), letter-spacing 0.35s;
@@ -502,25 +626,18 @@ body {
 .class-card:hover .class-card-blob { transform: translate(-38%, 38%) scale(1.6); opacity: 0.45; }
 /* Compact variant for the explorer's class row, and the picked state. */
 .class-card-sm { border-radius: 20px; }
-.class-card-sm .class-card-roman { font-size: 26px; }
+.class-card-sm .class-card-roman { font-size: 16px; }
 .class-card[aria-pressed='true'] {
   background: #FFC53D;
   border-color: #E0A81F;
   box-shadow: 0 5px 0 #E0A81F;
   transform: translateY(-3px);
 }
-.class-card[aria-pressed='true'] .class-card-roman { color: #1E2233; }
+.class-card[aria-pressed='true'] .class-card-roman { --ink: #1E2233; }
+/* A clear ring so the picked class stands out from the rest (outline, so it never fights the ledge shadow). */
+.class-card[aria-pressed='true'],
+.class-card[aria-pressed='true']:focus-visible { outline: 3px solid #3B4FE0; outline-offset: 3px; }
 .class-card[aria-pressed='true'] .class-card-blob { background: #FFE39A; }
-/* Diagonal light sheen that sweeps across once per hover. */
-.class-card-sheen {
-  position: absolute;
-  inset: -40% auto -40% -60%;
-  width: 45%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent);
-  transform: skewX(-18deg) translateX(0);
-  pointer-events: none;
-}
-.class-card:hover .class-card-sheen { transform: skewX(-18deg) translateX(420%); transition: transform 0.7s ease; }
 
 
 /* Frosted panel used by the hero's cards, so they sit on the aurora instead of blocking it out. */
@@ -540,7 +657,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fun-tile, .fun-tile-icon, .class-card, .class-card-roman, .class-card-blob, .class-card-sheen { transition: none; }
+  .fun-tile, .fun-tile-icon, .class-card, .class-card-roman, .class-card-blob { transition: none; }
 }
 
 /* Scroll reveal. Content only starts hidden once JS marks the page ready, so it never disappears without JS. */
@@ -569,4 +686,15 @@ body {
     transform: none;
     transition: none;
   }
+}
+
+/* Class 1–5 phone nav: the current tab pops up as a yellow button, like a game menu. */
+[data-stage='primary'] .m-nav { font-size: 11px; }
+[data-stage='primary'] .m-nav .m-bubble { width: 2.5rem; height: 2.5rem; border-radius: 9999px; transition: transform 0.25s cubic-bezier(0.3, 1.5, 0.5, 1), background 0.2s; }
+[data-stage='primary'] .m-nav[data-active] { color: #1E2233; }
+[data-stage='primary'] .m-nav[data-active] .m-bubble {
+  background: #FFC53D;
+  color: #1E2233;
+  box-shadow: 0 4px 0 #E0A81F;
+  transform: translateY(-10px);
 }

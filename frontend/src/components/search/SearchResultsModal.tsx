@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Search, X, Video as VideoIcon, Book, Sparkles } from 'lucide-react';
+import { Search, X, Video as VideoIcon, Book, SearchX } from 'lucide-react';
 import { useSearch } from '../../hooks/useSearch';
 import { Video } from '../../types';
 import { getClassTileStyle } from '../../data/colorTokens';
@@ -105,7 +105,7 @@ export const SearchResultsModal: React.FC<SearchResultsModalProps> = ({
           {!isSearching && (
             <div className="px-6 py-10 text-center">
               <span className="mx-auto mb-3 w-12 h-12 rounded-[16px] bg-[color:var(--brand-soft)] text-[color:var(--brand)] flex items-center justify-center">
-                <Sparkles className="w-6 h-6" />
+                <SearchX className="w-6 h-6" />
               </span>
               <p className="font-display text-lg text-[#1E2233]">Find a lesson</p>
               <p className="mt-1 text-sm font-semibold text-[#6B7280]">Type at least 2 letters to search lesson titles, chapters and subjects.</p>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, MessageSquare, CheckCircle, AlertCircle, Sparkles } from 'lucide-react';
+import { Send, MessageSquare, CheckCircle, AlertCircle, LogIn } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { FeedbackService } from '../../services/feedback';
 import { StorageService } from '../../services/storage';
@@ -130,7 +130,7 @@ export const FeedbackForm: React.FC<FeedbackFormProps> = ({ youtubeId, videoTitl
               onClick={() => setAuthModalOpen(true)}
               className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-[color:var(--brand)] bg-[color:var(--brand)]/10 hover:bg-[color:var(--brand)]/20 rounded-[14px] transition-colors cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <LogIn className="w-3.5 h-3.5" />
               <span>Sign in to Submit</span>
             </button>
           )}

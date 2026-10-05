@@ -8,8 +8,12 @@ export function toPublicUser(user: User) {
     displayName: user.displayName,
     photoUrl: user.photoUrl,
     phoneNumber: user.phoneNumber,
+    city: user.city,
     role: user.role,
     referralCode: user.referralCode,
+    hasReferrer: user.referredByCode != null,
+    // Shown on the profile: students screenshot it to claim referral goodies.
+    referredByCode: user.referredByCode,
     classGrade: user.classGrade,
     xp: user.xp,
     streak: user.streak,
@@ -34,6 +38,7 @@ export function toPublicUser(user: User) {
             language: user.consentLanguage,
             parent_name: user.consentParentName,
             parent_email: user.consentParentEmail,
+            parent_phone: user.consentParentPhone,
             granted_at: user.consentGrantedAt,
             requested_at: user.consentRequestedAt,
           }

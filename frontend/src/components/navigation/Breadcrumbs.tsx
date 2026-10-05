@@ -13,7 +13,11 @@ interface BreadcrumbsProps {
 
 export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items }) => {
   return (
-    <nav aria-label="Breadcrumb" className="flex items-center space-x-1 text-xs text-[#6B7280] py-2 overflow-x-auto">
+    // A white pill, like the lesson page's "Back" link, so it stays readable on the doodle wallpaper.
+    <nav
+      aria-label="Breadcrumb"
+      className="inline-flex max-w-full items-center space-x-1 px-4 py-2 rounded-full bg-white border-2 border-[#E3E5EC] text-xs font-bold text-[#6B7280] overflow-x-auto"
+    >
       <button
         onClick={items[0]?.onClick}
         className="flex items-center gap-1 hover:text-[color:var(--brand)] transition-colors cursor-pointer shrink-0"
