@@ -534,35 +534,6 @@ body {
 }
 .fun-tile:hover .fun-tile-icon { transform: rotate(6deg) scale(1.08); }
 
-/* Roman numerals as puffy balloon letters (every class button): a dark extruded layer, a solid face in the class
-   colour fattened with a same-colour stroke, and a lighter highlight over the top half. Flat colours, no gradients. */
-.numeral-3d {
-  --deep: color-mix(in srgb, var(--ink) 62%, #1E2233);
-  --lite: color-mix(in srgb, var(--ink) 45%, #fff);
-  position: relative;
-  display: inline-block;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.1em;
-}
-.numeral-3d > span { -webkit-text-stroke: 0.045em var(--ink); paint-order: stroke fill; }
-.numeral-3d-depth {
-  position: absolute;
-  inset: 0;
-  color: var(--deep);
-  -webkit-text-stroke-color: var(--deep) !important;
-  transform: translateY(0.07em);
-  filter: drop-shadow(0 0.08em 0.06em rgba(30, 34, 51, 0.25));
-}
-.numeral-3d-face { position: relative; color: var(--ink); }
-.numeral-3d-shine {
-  position: absolute;
-  inset: 0;
-  color: var(--lite);
-  -webkit-text-stroke-color: var(--lite) !important;
-  clip-path: inset(0 0 56% 0);
-  opacity: 0.85;
-}
 /* Landing class cards: pastel tile with a ledge, balloon numeral in a white badge, playful hover. */
 .class-card {
   position: relative;
@@ -590,18 +561,13 @@ body {
   outline: none;
 }
 .class-card:focus-visible { box-shadow: 0 0 0 4px #FFC53D; }
-/* White circle the numeral sits in, like a sticker on the tile. */
-.class-card-badge {
-  position: relative;
-  width: min(78px, 62%);
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  border-radius: 9999px;
-  background: #fff;
+/* The Roman numeral artwork: a rounded tile sitting on the card with a small ledge. */
+.class-card-img {
+  width: min(84px, 66%);
+  border-radius: 18px;
   box-shadow: 0 4px 0 var(--line);
 }
-.class-card-sm .class-card-badge { width: min(46px, 54%); }
+.class-card-sm .class-card-img { width: min(48px, 62%); border-radius: 12px; box-shadow: 0 3px 0 var(--line); }
 .class-card-roman {
   position: relative;
   font-size: clamp(20px, 3.8vw, 31px);
@@ -633,7 +599,6 @@ body {
   box-shadow: 0 5px 0 #E0A81F;
   transform: translateY(-3px);
 }
-.class-card[aria-pressed='true'] .class-card-roman { --ink: #1E2233; }
 /* A clear ring so the picked class stands out from the rest (outline, so it never fights the ledge shadow). */
 .class-card[aria-pressed='true'],
 .class-card[aria-pressed='true']:focus-visible { outline: 3px solid #3B4FE0; outline-offset: 3px; }

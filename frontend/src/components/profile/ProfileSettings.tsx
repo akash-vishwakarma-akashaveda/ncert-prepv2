@@ -561,9 +561,9 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             <label className="block text-xs font-extrabold text-[#1E2233] mb-1.5">
               Your Class
             </label>
-            <div role="group" aria-label="Your class" className="grid grid-cols-[repeat(auto-fill,minmax(60px,1fr))] gap-2.5 pb-1">
+            <div role="group" aria-label="Your class" className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-2.5 sm:gap-3 pb-1">
               {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')).map((c) => (
-                <ClassTile key={c} classSort={c} size="sm" selected={selectedGrade === c} onClick={() => handleGradeChange(c)} />
+                <ClassTile key={c} classSort={c} size="md" selected={selectedGrade === c} onClick={() => handleGradeChange(c)} />
               ))}
             </div>
             <p className="text-[11px] text-[#6B7280] mt-1">

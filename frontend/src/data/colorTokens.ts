@@ -68,13 +68,29 @@ export function getSubjectTileStyle(subject: string): ClassTileStyle {
   return CLASS_PALETTE[(hash % 6) + 1];
 }
 
-/**
- * Returns accessible styling tokens for a given class index (1-based, wraps around 1-6)
- */
+/** Background colour of each class's Roman numeral artwork (public/roman/class-NN.webp), sampled from the images. */
+const ROMAN_ART = ['#62BEE9', '#2D57CF', '#FCD437', '#FF6372', '#49B2AF', '#FAEE41', '#82DEB8', '#FB544A', '#551A87', '#6ED4CD', '#7757BF', '#FC8F34'];
+
+/** Mix two #RRGGBB colours: t = 0 gives a, t = 1 gives b. */
+function mix(a: string, b: string, t: number): string {
+  const ch = (h: string, i: number) => parseInt(h.slice(1 + i * 2, 3 + i * 2), 16);
+  return '#' + [0, 1, 2].map((i) => Math.round(ch(a, i) + (ch(b, i) - ch(a, i)) * t).toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+/** Perceived lightness 0–1, to darken light artwork colours (yellows) more for readable text. */
+const lightness = (h: string) => (0.299 * parseInt(h.slice(1, 3), 16) + 0.587 * parseInt(h.slice(3, 5), 16) + 0.114 * parseInt(h.slice(5, 7), 16)) / 255;
+
+/** Class tiles take their colours from their own Roman numeral artwork, so card and picture match. */
+const CLASS_TILE_STYLES: ClassTileStyle[] = ROMAN_ART.map((art, i) => {
+  const ink = mix(art, '#1E2233', lightness(art) > 0.7 ? 0.6 : lightness(art) > 0.5 ? 0.42 : 0.15);
+  return { bg: mix(art, '#FFFFFF', 0.86), border: mix(art, '#FFFFFF', 0.5), badgeBg: mix(art, '#FFFFFF', 0.5), text: mix(art, '#1E2233', 0.75), ink, name: `class-${i + 1}` };
+});
+
+/** Styling tokens for a class (1–12), matched to that class's Roman numeral artwork. */
 export function getClassTileStyle(classSortOrIndex: string | number): ClassTileStyle {
   const numeric = typeof classSortOrIndex === 'string' ? parseInt(classSortOrIndex.replace(/\D/g, ''), 10) : classSortOrIndex;
-  const validIndex = isNaN(numeric) || numeric <= 0 ? 1 : ((numeric - 1) % 6) + 1;
-  return CLASS_PALETTE[validIndex] || CLASS_PALETTE[1];
+  const n = isNaN(numeric) || numeric < 1 ? 1 : ((numeric - 1) % 12) + 1;
+  return CLASS_TILE_STYLES[n - 1];
 }
 
 export const BRAND_COLORS = {

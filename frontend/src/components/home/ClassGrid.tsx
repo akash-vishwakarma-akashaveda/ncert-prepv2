@@ -4,20 +4,19 @@ import { getClassTileStyle } from '../../data/colorTokens';
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 export const romanClass = (classSort: string) => ROMAN[parseInt(classSort, 10) - 1] || classSort;
 
-/** Roman numeral as puffy balloon lettering: a dark extruded layer, a solid face and a lighter highlight on the
- * top half (flat colours, no gradients; see .numeral-3d). */
-export const Numeral3D: React.FC<{ classSort?: string; text?: string; ink: string; className?: string }> = ({ classSort = '', text, ink, className = '' }) => {
-  const r = text ?? romanClass(classSort);
-  return (
-    <span className={`numeral-3d font-display ${className}`} style={{ ['--ink' as string]: ink }}>
-      <span className="numeral-3d-depth" aria-hidden="true">{r}</span>
-      <span className="numeral-3d-face">{r}</span>
-      <span className="numeral-3d-shine" aria-hidden="true">{r}</span>
-    </span>
-  );
-};
+/** The class's Roman numeral artwork (public/roman/class-01…12.webp, 320px). Decorative: buttons carry the label. */
+export const RomanImage: React.FC<{ classSort: string; className?: string }> = ({ classSort, className = '' }) => (
+  <img
+    src={`/roman/class-${String(parseInt(classSort, 10)).padStart(2, '0')}.webp`}
+    alt=""
+    aria-hidden="true"
+    loading="lazy"
+    draggable={false}
+    className={`aspect-square object-cover select-none ${className}`}
+  />
+);
 
-/** EduPlay class tile: 3D Roman numeral on the class colour, with a ledge that presses down. Selected = yellow with a ring. */
+/** EduPlay class tile: Roman numeral artwork on the class colour, with a ledge that presses down. Selected = yellow with a ring. */
 export const ClassTile: React.FC<{
   classSort: string;
   selected?: boolean;
@@ -43,10 +42,9 @@ export const ClassTile: React.FC<{
       style={{ background: bg, borderColor: edge, ['--edge' as string]: edge, ...style }}
       {...rest}
     >
-      <Numeral3D
+      <RomanImage
         classSort={classSort}
-        ink={selected ? '#1E2233' : t.ink}
-        className={size === 'lg' ? 'text-[27px]' : size === 'md' ? 'text-[22px]' : 'text-[18px]'}
+        className={size === 'lg' ? 'w-14 rounded-[14px]' : size === 'md' ? 'w-[58%] rounded-[12px]' : 'w-[56%] rounded-[10px]'}
       />
       <span className={`whitespace-nowrap font-extrabold text-[#6B7280] ${size === 'sm' ? 'text-[8.5px]' : 'text-[9.5px]'} tracking-[0.06em]`}>
         CLASS {n}
@@ -55,7 +53,7 @@ export const ClassTile: React.FC<{
   );
 };
 
-/** Landing class card: pastel tile, balloon Roman numeral in a white badge, then CLASS and the number.
+/** Landing class card: pastel tile, Roman numeral artwork, then CLASS and the number.
  * On hover it lifts and tilts, the corner blob swells and the numeral pops (all CSS, see .class-card). */
 export const ClassCard: React.FC<{
   classSort: string;
@@ -78,9 +76,7 @@ export const ClassCard: React.FC<{
       style={{ ['--bg' as string]: t.bg, ['--line' as string]: t.border, ['--ink' as string]: t.ink, ['--tilt' as string]: `${tilt}deg` }}
     >
       <span aria-hidden="true" className="class-card-blob" />
-      <span className="class-card-badge">
-        <Numeral3D classSort={classSort} ink={selected ? '#1E2233' : t.ink} className="class-card-roman" />
-      </span>
+      <RomanImage classSort={classSort} className="class-card-roman class-card-img" />
       <span className="relative text-[9.5px] font-extrabold tracking-[0.14em] text-[#6B7280] mt-1">CLASS</span>
       <span className={`relative font-display leading-none ${compact ? 'text-[17px]' : 'text-[24px]'}`} style={{ color: selected ? '#1E2233' : t.ink }}>
         {n}
