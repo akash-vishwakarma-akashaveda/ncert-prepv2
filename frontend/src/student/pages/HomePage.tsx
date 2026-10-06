@@ -102,7 +102,6 @@ export const HomePage: React.FC = () => {
         allVideos={allVideos}
         records={records}
         onRefreshCatalog={refreshCatalog}
-        onBackToApp={() => navigate('/browse')}
         onSelectVideo={(v) => navigate(`/app/lesson/${encodeURIComponent(v.youtube_id)}`)}
         currentSection={(searchParams.get('tab') as any) || 'overview'}
         onSectionChange={(nextSection, options) => {

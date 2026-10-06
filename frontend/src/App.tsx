@@ -27,7 +27,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 type PublicTab = 'home' | 'browse' | 'demo' | 'profile' | 'privacy';
 const FULL_BLEED = ['/', '/demo'];
-const OPEN_WHEN_SIGNED_IN = ['/privacy', '/demo', '/parent-consent', '/verify-email', '/reset-password'];
+const OPEN_WHEN_SIGNED_IN = ['/privacy', '/demo', '/browse', '/parent-consent', '/verify-email', '/reset-password'];
 const PUBLIC_PATHS: Partial<Record<PublicTab, string>> = { home: '/', browse: '/browse', demo: '/demo', privacy: '/privacy', profile: '/app' };
 
 // Visitor pages: landing, syllabus explorer, privacy, public lesson view.

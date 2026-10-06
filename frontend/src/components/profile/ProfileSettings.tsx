@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   LogOut,
   CheckCircle2,
@@ -693,7 +693,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               {user.consent?.status === 'granted'
                 ? `Consent given ${user.consent.method === 'parent' ? `by your parent/guardian (${user.consent.parent_email})` : 'by you'} under notice version ${user.consent.notice_version}.`
                 : 'Consent not recorded.'}{' '}
-              <a href="/privacy" className="text-[color:var(--brand)] font-extrabold">Read the privacy notice</a>
+              <Link to="/privacy" className="text-[color:var(--brand)] font-extrabold underline-offset-4 hover:underline">Read the privacy notice</Link>
             </p>
           </div>
 

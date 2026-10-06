@@ -8,12 +8,14 @@ import { useAuth } from '../context/AuthContext';
 import { useCatalogContext } from '../context/CatalogContext';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { useDashboardConfig } from '../hooks/useDashboardConfig';
-import { SubjectGlyph, btnAccent, btnSecondary, card } from '../student/ui';
+import { SubjectGlyph, btnAccent, btnSecondary, card, chapterNumbers } from '../student/ui';
 import { Mascot } from '../student/stage';
 import { STAGES, toDisplayTitle } from '../components/home/StageShowcase';
 import { thumbnailUrl } from '../components/home/JumpBackInCard';
 import { ClassCard } from '../components/home/ClassGrid';
-import { ChapterList } from '../components/navigation/ChapterList';
+import { ChapterPath } from '../student/kids/KidsScreens';
+import { isLessonUnlocked } from '../services/accessControl';
+import { useProgress } from '../context/ProgressContext';
 import { ChapterListSkeleton } from '../components/common/SkeletonLoader';
 import { RevisionNotesModal } from '../components/app/RevisionNotesModal';
 import { getSubjectTileStyle } from '../data/colorTokens';
@@ -74,6 +76,7 @@ export const DemoPage: React.FC = () => {
   useDocumentTitle('Free demo & syllabus explorer — NCERT Prep');
   const navigate = useNavigate();
   const { user, setAuthModalOpen } = useAuth();
+  const { isCompleted } = useProgress();
   const { classes, getSubjectsForClass, loading: catalogLoading } = useCatalogContext();
   const [params, setParams] = useSearchParams();
   const [videos, setVideos] = useState<Video[] | null>(null);
@@ -306,12 +309,22 @@ export const DemoPage: React.FC = () => {
                         </button>
                       </div>
                     )}
-                    <ChapterList
+                    {/* Same width as the student's subject page, so the road keeps its shape. */}
+                    <div className="max-w-[720px] mx-auto">
+                    <ChapterPath
+                      subject={activeSubject.name}
                       chapters={activeSubject.chapters}
-                      onSelectVideo={(v) => navigate(`/watch/${encodeURIComponent(v.youtube_id)}`)}
-                      onOpenNotes={setNotesTarget}
+                      stage={getGradeStage(classSort)}
                       notesKeys={notesKeys}
+                      onOpenNotes={setNotesTarget}
+                      onOpen={(c) => {
+                        const next = c.videos.find((v) => !isCompleted(v.youtube_id)) ?? c.videos[0];
+                        if (next) navigate(`/watch/${encodeURIComponent(next.youtube_id)}`);
+                      }}
+                      isLocked={(c, i) => c.videos.length > 0 && !isLessonUnlocked(c.videos[0], user, chapterNumbers(activeSubject.chapters)[i] - 1, 0, config?.policy)}
+                      onLocked={() => setAuthModalOpen(true)}
                     />
+                    </div>
                   </div>
                 </div>
               )}

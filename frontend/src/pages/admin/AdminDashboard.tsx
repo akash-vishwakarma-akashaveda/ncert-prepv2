@@ -9,7 +9,6 @@ import {
   Database,
   Shield,
   Sliders,
-  Eye,
   Gift,
 } from 'lucide-react';
 import { ChapterNotes, Doubt, Feedback, Video } from '../../types';
@@ -40,7 +39,6 @@ export interface AdminDashboardProps {
   allVideos: Video[];
   records: CurriculumRecords;
   onRefreshCatalog: () => Promise<void>;
-  onBackToApp: () => void;
   onSelectVideo: (video: Video) => void;
   currentSection?: AdminSectionId;
   onSectionChange?: (section: AdminSectionId, options?: AdminNavigateOptions) => void;
@@ -52,7 +50,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   allVideos,
   records,
   onRefreshCatalog,
-  onBackToApp,
   onSelectVideo,
   currentSection,
   onSectionChange,
@@ -169,14 +166,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   <p className="text-[11px] text-slate-400 truncate">{user?.email || adminName}</p>
                 </div>
               </div>
-              <button
-                onClick={onBackToApp}
-                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl bg-white/10 hover:bg-white/20 cursor-pointer transition-colors"
-                title="View student curriculum and syllabus"
-              >
-                <Eye className="w-3.5 h-3.5 text-purple-200" />
-                Student Syllabus View
-              </button>
             </div>
 
             <nav

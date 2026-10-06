@@ -44,16 +44,13 @@ export const ClassTile: React.FC<{
     >
       <RomanImage
         classSort={classSort}
-        className={size === 'lg' ? 'w-14 rounded-[14px]' : size === 'md' ? 'w-[58%] rounded-[12px]' : 'w-[56%] rounded-[10px]'}
+        className={size === 'lg' ? 'w-16 rounded-[16px]' : size === 'md' ? 'w-[70%] rounded-[14px]' : 'w-[68%] rounded-[12px]'}
       />
-      <span className={`whitespace-nowrap font-extrabold text-[#6B7280] ${size === 'sm' ? 'text-[8.5px]' : 'text-[9.5px]'} tracking-[0.06em]`}>
-        CLASS {n}
-      </span>
     </button>
   );
 };
 
-/** Landing class card: pastel tile, Roman numeral artwork, then CLASS and the number.
+/** Landing class card: pastel tile, Roman numeral artwork and the lesson count.
  * On hover it lifts and tilts, the corner blob swells and the numeral pops (all CSS, see .class-card). */
 export const ClassCard: React.FC<{
   classSort: string;
@@ -65,7 +62,6 @@ export const ClassCard: React.FC<{
   compact?: boolean;
 }> = ({ classSort, label, lessons, onClick, tilt = -3, selected, compact }) => {
   const t = getClassTileStyle(classSort);
-  const n = parseInt(classSort, 10);
   return (
     <button
       type="button"
@@ -77,11 +73,12 @@ export const ClassCard: React.FC<{
     >
       <span aria-hidden="true" className="class-card-blob" />
       <RomanImage classSort={classSort} className="class-card-roman class-card-img" />
-      <span className="relative text-[9.5px] font-extrabold tracking-[0.14em] text-[#6B7280] mt-1">CLASS</span>
-      <span className={`relative font-display leading-none ${compact ? 'text-[17px]' : 'text-[24px]'}`} style={{ color: selected ? '#1E2233' : t.ink }}>
-        {n}
-      </span>
-      {lessons && !compact ? <span className="relative text-[10.5px] font-bold text-[#6B7280]">{lessons} lessons</span> : null}
+      {/* The artwork is the class; the button's aria-label still says "Class n" for screen readers. */}
+      {lessons && !compact ? (
+        <span className="relative mt-1.5 text-[11.5px] font-extrabold" style={{ color: selected ? '#1E2233' : t.ink }}>
+          {lessons} lessons
+        </span>
+      ) : null}
     </button>
   );
 };

@@ -171,6 +171,14 @@ router.post('/me/consent/adult', async (req, res) => {
   res.json(toPublicUser(user));
 });
 
+const OWN_EMAIL_ERROR = "Use your parent's or guardian's email address, not your own.";
+
+/** A parent's email that is the student's own would let the student approve themselves. */
+async function isOwnEmail(userId: string, email: string): Promise<boolean> {
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+  return Boolean(me && me.email.trim().toLowerCase() === email.trim().toLowerCase());
+}
+
 const parentConsentSchema = z.object({
   parentName: z.string().min(1),
   parentEmail: z.string().email(),
@@ -181,6 +189,7 @@ router.post('/me/consent/parent-request', async (req, res) => {
   const parsed = parentConsentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { parentName, parentEmail, language } = parsed.data;
+  if (await isOwnEmail(req.user!.userId, parentEmail)) return res.status(400).json({ error: OWN_EMAIL_ERROR });
 
   const token = randomBytes(24).toString('base64url');
   const expiresAt = new Date(Date.now() + CONSENT_REQUEST_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -235,6 +244,7 @@ router.post('/me/consent/minor', async (req, res) => {
   const parsed = minorConsentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check the parent details' });
   const { ageBand, parentName, parentEmail, parentPhone, language } = parsed.data;
+  if (await isOwnEmail(req.user!.userId, parentEmail)) return res.status(400).json({ error: OWN_EMAIL_ERROR });
 
   const token = randomBytes(24).toString('base64url');
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Check, ChevronLeft, FileText, Play, Star } from 'lucide-react';
+import { Check, ChevronLeft, FileText, Lock, Play, Star } from 'lucide-react';
 import { ChapterGroup } from '../../types';
 import { useProgress } from '../../context/ProgressContext';
 import { classLabel } from '../../data/gamification';
@@ -110,6 +110,119 @@ export const SubjectPickerTip: React.FC = () => (
 
 type NodeState = 'done' | 'current' | 'next';
 
+/**
+ * A subject's chapters as a winding road: done stops get a tick, the current one glows, the rest wait.
+ * Used by the student's subject page and the public demo (which passes isLocked/onLocked for visitors).
+ */
+export const ChapterPath: React.FC<{
+  subject: string;
+  chapters: ChapterGroup[];
+  stage: EducationalStage | null;
+  notesKeys: Set<string>;
+  onOpenNotes: (chapter: ChapterGroup) => void;
+  onOpen: (chapter: ChapterGroup) => void;
+  isLocked?: (chapter: ChapterGroup, index: number) => boolean;
+  onLocked?: (chapter: ChapterGroup) => void;
+}> = ({ subject, chapters, stage, notesKeys, onOpenNotes, onOpen, isLocked, onLocked }) => {
+  const { isCompleted } = useProgress();
+  const copy = copyFor(stage);
+  const t = getSubjectTileStyle(subject);
+  const numbers = chapterNumbers(chapters);
+  const multiBook = new Set(chapters.map((c) => c.textbook || '')).size > 1;
+  const isDone = (c: ChapterGroup) => c.videos.length > 0 && c.videos.every((v) => isCompleted(v.youtube_id));
+  const currentIndex = chapters.findIndex((c) => !isDone(c) && !isLocked?.(c, chapters.indexOf(c)));
+  return (
+    <ol className="relative py-4" aria-label="Chapters">
+      {/* The road: a dashed line down the middle that the chapter stops sit on. */}
+      <span aria-hidden="true" className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-3 rounded-full bg-[#E9DCC0]" />
+      <span aria-hidden="true" className="absolute left-1/2 top-2 bottom-2 -translate-x-1/2 border-l-[3px] border-dashed border-white" />
+      {chapters.map((c, i) => {
+        const state: NodeState = isDone(c) ? 'done' : i === currentIndex ? 'current' : 'next';
+        // Visitors: chapters outside the free preview show a lock and open sign-up instead.
+        const locked = Boolean(isLocked?.(c, i)) && state !== 'done';
+        const left = i % 2 === 0;
+        const lessons = c.videos.length;
+        const lessonsDone = c.videos.filter((v) => isCompleted(v.youtube_id)).length;
+        return (
+          <React.Fragment key={c.key}>
+            {multiBook && c.textbook !== chapters[i - 1]?.textbook && (
+              <li className="relative flex justify-center mb-7">
+                <span className="relative z-10 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[color:var(--brand)] text-white text-[13px] font-extrabold shadow-[0_4px_0_var(--brand-edge)]">
+                  <span className="text-[10px] tracking-[0.12em] opacity-80">BOOK</span> {c.textbook || 'Other chapters'}
+                </span>
+              </li>
+            )}
+            <li className={`relative flex ${left ? 'justify-start' : 'justify-end'} mb-7 last:mb-0`}>
+              <span
+                aria-hidden="true"
+                className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full border-[4px] flex items-center justify-center text-[13px] font-extrabold ${
+                  state === 'done'
+                    ? 'bg-[#12A594] border-white text-white'
+                    : state === 'current'
+                      ? 'bg-[#FFC53D] border-white text-[#1E2233] animate-glow'
+                      : 'bg-[#F1F3FB] border-white text-[#9AA1B4]'
+                }`}
+              >
+                {state === 'done' ? <Check className="w-4 h-4" strokeWidth={3.5} /> : locked ? <Lock className="w-3.5 h-3.5" /> : numbers[i]}
+              </span>
+              <div className={`relative w-[calc(50%-28px)] ${left ? 'pr-1' : 'pl-1'}`}>
+                <button
+                  type="button"
+                  onClick={() => (locked ? onLocked?.(c) : onOpen(c))}
+                  disabled={lessons === 0}
+                  className={`w-full text-left flex items-center gap-3 p-4 rounded-[24px] border-[3px] cursor-pointer transition-transform hover:-translate-y-0.5 disabled:cursor-default disabled:hover:translate-y-0 ${
+                    state === 'current'
+                      ? 'bg-[#FFC53D] border-[#E0A81F] shadow-[0_6px_0_#E0A81F] scale-[1.04]'
+                      : state === 'done'
+                        ? 'bg-white border-[#A9E6D3] shadow-[0_5px_0_#A9E6D3]'
+                        : 'bg-white border-[#E3E5EC] shadow-[0_5px_0_#E3E5EC]'
+                  }`}
+                >
+                  {state === 'current' && (
+                    <span className="w-11 h-11 shrink-0 rounded-full bg-white flex items-center justify-center shadow-[0_3px_0_#E0A81F]">
+                      <Play className="w-5 h-5 fill-[#1E2233] text-[#1E2233] ml-0.5" />
+                    </span>
+                  )}
+                  <span className="min-w-0">
+                    <span className="block text-[10.5px] font-extrabold tracking-[0.08em] text-[#6B7280]">
+                      CHAPTER {numbers[i]}
+                      {state === 'current' && ' · UP NEXT'}
+                    </span>
+                    <span className={`block font-display leading-snug ${state === 'current' ? 'text-[19px] text-[#1E2233]' : state === 'done' ? 'text-[16px] text-[#1E2233]' : 'text-[16px] text-[#4B5168]'}`}>
+                      {c.chapter_name}
+                    </span>
+                    <span className="block text-[11.5px] font-bold" style={{ color: state === 'done' ? '#0B7A67' : t.ink }}>
+                      {lessons === 0
+                        ? 'Coming soon'
+                      : locked
+                        ? 'Sign in to watch'
+                        : state === 'done'
+                          ? copy.done
+                          : lessons > 1 && lessonsDone > 0
+                            ? `${lessonsDone} of ${copy.lessons(lessons)} done`
+                            : copy.lessons(lessons)}
+                    </span>
+                  </span>
+                </button>
+                {notesKeys.has(c.key) && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenNotes(c)}
+                    aria-label={`Notes for ${c.chapter_name}`}
+                    className="absolute -top-2 right-2 w-8 h-8 rounded-full bg-white border-2 border-[color:var(--brand-line)] text-[color:var(--brand)] flex items-center justify-center shadow-[0_2px_0_var(--brand-line)] cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </li>
+          </React.Fragment>
+        );
+      })}
+    </ol>
+  );
+};
+
 /** A subject's chapters as a winding road: done stops get a tick, the current one glows, the rest wait. */
 export const LearningPath: React.FC<{
   classSort: string;
@@ -121,14 +234,11 @@ export const LearningPath: React.FC<{
   const { isCompleted } = useProgress();
   const navigate = useNavigate();
   const copy = copyFor(stage);
-  const t = getSubjectTileStyle(summary.group.name);
   const chapters = summary.group.chapters;
-  const numbers = chapterNumbers(chapters);
   // Several books in one subject (common from Class 6 up): the path gets a signpost at each new book.
   const books = Array.from(new Set(chapters.map((c) => c.textbook || '')));
   const multiBook = books.length > 1;
   const isDone = (c: ChapterGroup) => c.videos.length > 0 && c.videos.every((v) => isCompleted(v.youtube_id));
-  const currentIndex = chapters.findIndex((c) => !isDone(c));
   const doneCount = chapters.filter(isDone).length;
   const open = (c: ChapterGroup) => {
     const next = c.videos.find((v) => !isCompleted(v.youtube_id)) ?? c.videos[0];
@@ -160,90 +270,14 @@ export const LearningPath: React.FC<{
       {chapters.length === 0 ? (
         <p className="text-center text-sm font-bold text-[#6B7280]">Lessons for this book are coming soon.</p>
       ) : (
-        <ol className="relative py-4" aria-label="Chapters">
-          {/* The road: a dashed line down the middle that the chapter stops sit on. */}
-          <span aria-hidden="true" className="absolute left-1/2 top-0 bottom-0 -translate-x-1/2 w-3 rounded-full bg-[#E9DCC0]" />
-          <span aria-hidden="true" className="absolute left-1/2 top-2 bottom-2 -translate-x-1/2 border-l-[3px] border-dashed border-white" />
-          {chapters.map((c, i) => {
-            const state: NodeState = isDone(c) ? 'done' : i === currentIndex ? 'current' : 'next';
-            const left = i % 2 === 0;
-            const lessons = c.videos.length;
-            const lessonsDone = c.videos.filter((v) => isCompleted(v.youtube_id)).length;
-            return (
-              <React.Fragment key={c.key}>
-                {multiBook && c.textbook !== chapters[i - 1]?.textbook && (
-                  <li className="relative flex justify-center mb-7">
-                    <span className="relative z-10 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[color:var(--brand)] text-white text-[13px] font-extrabold shadow-[0_4px_0_var(--brand-edge)]">
-                      <span className="text-[10px] tracking-[0.12em] opacity-80">BOOK</span> {c.textbook || 'Other chapters'}
-                    </span>
-                  </li>
-                )}
-                <li className={`relative flex ${left ? 'justify-start' : 'justify-end'} mb-7 last:mb-0`}>
-                  <span
-                    aria-hidden="true"
-                    className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full border-[4px] flex items-center justify-center text-[13px] font-extrabold ${
-                      state === 'done'
-                        ? 'bg-[#12A594] border-white text-white'
-                        : state === 'current'
-                          ? 'bg-[#FFC53D] border-white text-[#1E2233] animate-glow'
-                          : 'bg-[#F1F3FB] border-white text-[#9AA1B4]'
-                    }`}
-                  >
-                    {state === 'done' ? <Check className="w-4 h-4" strokeWidth={3.5} /> : numbers[i]}
-                  </span>
-                  <div className={`relative w-[calc(50%-28px)] ${left ? 'pr-1' : 'pl-1'}`}>
-                    <button
-                      type="button"
-                      onClick={() => open(c)}
-                      disabled={lessons === 0}
-                      className={`w-full text-left flex items-center gap-3 p-4 rounded-[24px] border-[3px] cursor-pointer transition-transform hover:-translate-y-0.5 disabled:cursor-default disabled:hover:translate-y-0 ${
-                        state === 'current'
-                          ? 'bg-[#FFC53D] border-[#E0A81F] shadow-[0_6px_0_#E0A81F] scale-[1.04]'
-                          : state === 'done'
-                            ? 'bg-white border-[#A9E6D3] shadow-[0_5px_0_#A9E6D3]'
-                            : 'bg-white border-[#E3E5EC] shadow-[0_5px_0_#E3E5EC]'
-                      }`}
-                    >
-                      {state === 'current' && (
-                        <span className="w-11 h-11 shrink-0 rounded-full bg-white flex items-center justify-center shadow-[0_3px_0_#E0A81F]">
-                          <Play className="w-5 h-5 fill-[#1E2233] text-[#1E2233] ml-0.5" />
-                        </span>
-                      )}
-                      <span className="min-w-0">
-                        <span className="block text-[10.5px] font-extrabold tracking-[0.08em] text-[#6B7280]">
-                          CHAPTER {numbers[i]}
-                          {state === 'current' && ' · UP NEXT'}
-                        </span>
-                        <span className={`block font-display leading-snug ${state === 'current' ? 'text-[19px] text-[#1E2233]' : state === 'done' ? 'text-[16px] text-[#1E2233]' : 'text-[16px] text-[#4B5168]'}`}>
-                          {c.chapter_name}
-                        </span>
-                        <span className="block text-[11.5px] font-bold" style={{ color: state === 'done' ? '#0B7A67' : t.ink }}>
-                          {lessons === 0
-                            ? 'Coming soon'
-                            : state === 'done'
-                              ? copy.done
-                              : lessons > 1 && lessonsDone > 0
-                                ? `${lessonsDone} of ${copy.lessons(lessons)} done`
-                                : copy.lessons(lessons)}
-                        </span>
-                      </span>
-                    </button>
-                    {notesKeys.has(c.key) && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenNotes(c)}
-                        aria-label={`Notes for ${c.chapter_name}`}
-                        className="absolute -top-2 right-2 w-8 h-8 rounded-full bg-white border-2 border-[color:var(--brand-line)] text-[color:var(--brand)] flex items-center justify-center shadow-[0_2px_0_var(--brand-line)] cursor-pointer"
-                      >
-                        <FileText className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </li>
-              </React.Fragment>
-            );
-          })}
-        </ol>
+        <ChapterPath
+          subject={summary.group.name}
+          chapters={chapters}
+          stage={stage}
+          notesKeys={notesKeys}
+          onOpenNotes={onOpenNotes}
+          onOpen={open}
+        />
       )}
     </div>
   );

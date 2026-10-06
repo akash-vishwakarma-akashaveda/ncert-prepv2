@@ -23,7 +23,6 @@ import {
   FileText,
   MessageSquare,
   Database,
-  Eye,
   Trophy,
   Gift,
 } from 'lucide-react';
@@ -260,7 +259,6 @@ export const StudentLayout: React.FC = () => {
   ];
 
   const adminAccountNav: NavItem[] = [
-    { to: '/browse', label: 'Student Syllabus View', icon: Eye },
     { to: '/app/profile', label: 'Profile & settings', icon: UserRound },
   ];
 

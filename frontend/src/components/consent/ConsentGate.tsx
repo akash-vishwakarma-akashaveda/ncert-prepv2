@@ -91,6 +91,8 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
   const [agreed, setAgreed] = useState(false);
   const [parentName, setParentName] = useState('');
   const [parentEmail, setParentEmail] = useState('');
+  // The parent's email must not be the student's own sign-up email (they would approve themselves).
+  const parentIsSelf = Boolean(user?.email) && parentEmail.trim().toLowerCase() === (user?.email ?? '').trim().toLowerCase();
   const [parentPhone, setParentPhone] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -281,9 +283,25 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
             </div>
             <div>
               <label htmlFor="parent-email" className="block text-xs font-extrabold text-[#1E2233] mb-1.5">{lang === 'en' ? 'Email address' : 'ईमेल पता'}</label>
-              <input id="parent-email" type="email" value={parentEmail} onChange={(e) => setParentEmail(e.target.value)} className={input} required />
+              <input
+                id="parent-email"
+                type="email"
+                value={parentEmail}
+                onChange={(e) => setParentEmail(e.target.value)}
+                aria-invalid={parentIsSelf || undefined}
+                aria-describedby={parentIsSelf ? 'parent-email-self' : undefined}
+                className={input}
+                required
+              />
             </div>
           </div>
+          {parentIsSelf && (
+            <p id="parent-email-self" role="alert" className="text-xs font-bold text-[#D14343]">
+              {lang === 'en'
+                ? "That's the email you signed up with. Enter your parent's or guardian's own email address."
+                : 'यह वही ईमेल है जिससे आपने साइन अप किया है। अपने माता-पिता या अभिभावक का अपना ईमेल पता दें।'}
+            </p>
+          )}
           <label className="flex items-start gap-3 p-3.5 rounded-[18px] bg-[#F7F8FC] border-2 border-[#E3E5EC] cursor-pointer">
             <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 w-5 h-5 accent-[#12A594] shrink-0" />
             <span className="text-[13px] font-bold text-[#1E2233]">
@@ -293,7 +311,7 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
             </span>
           </label>
           <div className="flex flex-wrap gap-2.5">
-            <button type="submit" disabled={busy || !agreed || !parentName.trim() || !parentEmail.trim() || !parentPhone.trim()} className={primary}>
+            <button type="submit" disabled={busy || !agreed || !parentName.trim() || !parentEmail.trim() || !parentPhone.trim() || parentIsSelf} className={primary}>
               {busy ? 'Saving…' : lang === 'en' ? 'Continue' : 'आगे बढ़ें'}
             </button>
             {changing && (
