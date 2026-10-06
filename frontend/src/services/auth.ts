@@ -180,9 +180,10 @@ export const AuthService = {
   updateProfile: (updates: Record<string, unknown>) => api.patch<BackendUser>('/api/users/me/profile', updates),
   updateSettings: (settings: Record<string, unknown>) => api.patch<BackendUser>('/api/users/me/settings', settings),
   applyReferralCode: (code: string) => api.post<BackendUser>('/api/users/me/referral', { code }),
-  giveMinorConsent: (body: { ageBand: 'under13' | '13-17'; parentName: string; parentEmail: string; parentPhone: string; language: string }) =>
+  giveMinorConsent: (body: { ageBand: 'under13'; parentName: string; parentEmail: string; parentPhone: string; language: string }) =>
     api.post<BackendUser>('/api/users/me/consent/minor', { ...body, agreed: true }),
-  giveAdultConsent: (language: string) => api.post<BackendUser>('/api/users/me/consent/adult', { language }),
+  giveAdultConsent: (language: string, ageBand: '13-17' | 'adult' = 'adult') =>
+    api.post<BackendUser>('/api/users/me/consent/adult', { language, ageBand }),
   requestParentConsent: (parentName: string, parentEmail: string, language: string) =>
     api.post<{ parentEmail: string }>('/api/users/me/consent/parent-request', { parentName, parentEmail, language }),
   deleteAccount: () => api.delete<{ ok: true }>('/api/users/me'),

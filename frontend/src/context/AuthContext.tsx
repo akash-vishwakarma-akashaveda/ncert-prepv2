@@ -24,8 +24,9 @@ interface AuthContextType {
   /** Re-reads verification state after the user clicks the link in their inbox. */
   refreshEmailVerified: () => Promise<boolean>;
   // DPDP consent, recorded server-side.
-  giveAdultConsent: (language: NoticeLang) => Promise<void>;
-  giveMinorConsent: (body: { ageBand: 'under13' | '13-17'; parentName: string; parentEmail: string; parentPhone: string; language: NoticeLang }) => Promise<void>;
+  /** Self-consent for 13 and over; `ageBand` records 13–17 vs 18+. */
+  giveAdultConsent: (language: NoticeLang, ageBand?: '13-17' | 'adult') => Promise<void>;
+  giveMinorConsent: (body: { ageBand: 'under13'; parentName: string; parentEmail: string; parentPhone: string; language: NoticeLang }) => Promise<void>;
   requestParentConsent: (parentName: string, parentEmail: string, language: NoticeLang) => Promise<string>;
   signOut: () => Promise<void>;
   /** Bumps the server-side session version, invalidating every session on every device (including this one). */
@@ -178,12 +179,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return backendUser.emailVerified;
   }, []);
 
-  const giveAdultConsent = useCallback(async (language: NoticeLang) => {
-    const backendUser = await AuthService.giveAdultConsent(language);
+  const giveAdultConsent = useCallback(async (language: NoticeLang, ageBand: '13-17' | 'adult' = 'adult') => {
+    const backendUser = await AuthService.giveAdultConsent(language, ageBand);
     applyBackendUser(backendUser);
   }, []);
 
-  const giveMinorConsent = useCallback(async (body: { ageBand: 'under13' | '13-17'; parentName: string; parentEmail: string; parentPhone: string; language: NoticeLang }) => {
+  const giveMinorConsent = useCallback(async (body: { ageBand: 'under13'; parentName: string; parentEmail: string; parentPhone: string; language: NoticeLang }) => {
     applyBackendUser(await AuthService.giveMinorConsent(body));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

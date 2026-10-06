@@ -191,7 +191,7 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
           >
             Send the email again
           </button>
-          <button onClick={() => { setChanging(true); setAge('13-17'); setParentName(user.consent?.parent_name || ''); }} className={quiet}>
+          <button onClick={() => { setChanging(true); setAge('under13'); setParentName(user.consent?.parent_name || ''); }} className={quiet}>
             Use a different email
           </button>
         </div>
@@ -229,7 +229,7 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
 
       {alerts}
 
-      {age === 'adult' && (
+      {(age === 'adult' || age === '13-17') && (
         <div className="space-y-3">
           <label className="flex items-start gap-3 p-3.5 rounded-[18px] bg-[#F7F8FC] border-2 border-[#E3E5EC] cursor-pointer">
             <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 w-5 h-5 accent-[#12A594] shrink-0" />
@@ -240,7 +240,7 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
             </span>
           </label>
           <div className="flex flex-wrap gap-2.5">
-            <button disabled={!agreed || busy} onClick={() => run(() => giveAdultConsent(lang))} className={primary}>
+            <button disabled={!agreed || busy} onClick={() => run(() => giveAdultConsent(lang, age === '13-17' ? '13-17' : 'adult'))} className={primary}>
               {busy ? 'Saving…' : lang === 'en' ? 'I agree, continue' : 'सहमत हूँ, आगे बढ़ें'}
             </button>
             <button onClick={decline} className={quiet}>
@@ -250,14 +250,14 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
         </div>
       )}
 
-      {(age === 'under13' || age === '13-17') && (
+      {age === 'under13' && (
         <form
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             run(async () => {
               await giveMinorConsent({
-                ageBand: age,
+                ageBand: 'under13',
                 parentName: parentName.trim(),
                 parentEmail: parentEmail.trim(),
                 parentPhone: parentPhone.trim(),

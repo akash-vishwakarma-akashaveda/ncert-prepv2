@@ -152,7 +152,11 @@ router.patch('/me/settings', async (req, res) => {
   res.json(toPublicUser(user));
 });
 
-const adultConsentSchema = z.object({ language: z.enum(['en', 'hi']).default('en') });
+// 13 and over consent for themselves (owner's rule, 2026-10-06); the age band is still recorded.
+const adultConsentSchema = z.object({
+  language: z.enum(['en', 'hi']).default('en'),
+  ageBand: z.enum(['13-17', 'adult']).default('adult'),
+});
 
 router.post('/me/consent/adult', async (req, res) => {
   const parsed = adultConsentSchema.safeParse(req.body);
@@ -161,7 +165,7 @@ router.post('/me/consent/adult', async (req, res) => {
     where: { id: req.user!.userId },
     data: {
       consentStatus: 'GRANTED',
-      consentAgeGroup: 'adult',
+      consentAgeGroup: parsed.data.ageBand,
       consentMethod: 'self',
       consentNoticeVersion: NOTICE_VERSION,
       consentLanguage: parsed.data.language,
@@ -227,7 +231,8 @@ router.post('/me/consent/parent-request', async (req, res) => {
 });
 
 const minorConsentSchema = z.object({
-  ageBand: z.enum(['under13', '13-17']),
+  // Only under-13s give a parent's details; 13 and over consent for themselves (/me/consent/adult).
+  ageBand: z.enum(['under13']),
   parentName: z.string().trim().min(1).max(80),
   parentEmail: z.string().trim().email(),
   parentPhone: z.string().trim().regex(/^\+?[0-9][0-9\s-]{6,18}$/, 'Enter a valid phone number'),
