@@ -17,7 +17,7 @@ interface LessonPlayerProps {
   onEnded: () => void;
 }
 
-// FR-2/FR-3: youtube-nocookie player via the IFrame Player API so "ended" and unavailable errors are real events.
+// FR-2/FR-3: youtube.com player via the IFrame Player API so "ended" and unavailable errors are real events.
 export const LessonPlayer: React.FC<LessonPlayerProps> = ({ youtubeId, title, onEnded }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const onEndedRef = useRef(onEnded);
@@ -60,7 +60,7 @@ export const LessonPlayer: React.FC<LessonPlayerProps> = ({ youtubeId, title, on
         const mount = document.createElement('div');
         host.appendChild(mount);
         player = new YT.Player(mount, {
-          host: 'https://www.youtube-nocookie.com',
+          host: 'https://www.youtube.com',
           videoId: youtubeId,
           width: '100%',
           height: '100%',

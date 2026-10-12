@@ -24,7 +24,7 @@ const MORE: [string, string][] = [
   ],
   [
     'Videos',
-    'Lessons play from YouTube’s privacy-enhanced domain (youtube-nocookie.com) without recommendations. We never access your YouTube account.',
+    'Lessons play in YouTube’s embedded player (youtube.com), with related videos limited to the same channel. YouTube may set cookies and collect viewing data under Google’s privacy policy. We never access your YouTube account.',
   ],
   ['Reminder emails', 'Off unless you turn them on. Every email has a one-click unsubscribe link.'],
   [

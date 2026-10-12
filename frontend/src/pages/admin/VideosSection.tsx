@@ -468,7 +468,7 @@ export const VideosSection: React.FC<VideosSectionProps> = ({ videos, tree, onRe
           <div className="space-y-4">
             <div className="aspect-video w-full rounded-[22px] overflow-hidden bg-black">
               <iframe
-                src={`https://www.youtube-nocookie.com/embed/${preview.youtube_id}?controls=1&rel=0&modestbranding=1`}
+                src={`https://www.youtube.com/embed/${preview.youtube_id}?controls=1&rel=0&modestbranding=1`}
                 title={preview.video_title}
                 className="w-full h-full border-0"
                 allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
