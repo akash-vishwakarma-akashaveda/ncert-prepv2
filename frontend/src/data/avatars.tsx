@@ -430,7 +430,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   }
 
   // If photoURL is a full URL (e.g. Google photo)
-  if (photoURL && (photoURL.startsWith('http://') || photoURL.startsWith('https://') || photoURL.startsWith('data:'))) {
+  if (photoURL && /^https:\/\/lh\d\.googleusercontent\.com\//.test(photoURL)) {
     return (
       <img
         src={photoURL}

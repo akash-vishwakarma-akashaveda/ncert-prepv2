@@ -20,6 +20,8 @@ export function allowedUpstream(raw: unknown): URL | null {
   }
   if (url.protocol !== 'https:') return null;
   if (!ALLOWED_HOSTS.has(url.hostname)) return null;
+  // Default port only: otherwise the proxy can be used to probe other ports on the allowed host.
+  if (url.port !== '') return null;
   if (!url.pathname.toLowerCase().endsWith('.pdf')) return null;
   return url;
 }
@@ -37,12 +39,24 @@ const FORWARDED_HEADERS = ['content-type', 'content-length', 'content-range', 'a
 // fresh connection costs nothing and is safe: this is a GET, so repeating it has no side effects.
 async function fetchUpstream(url: URL, range?: string): Promise<Response> {
   const headers: Record<string, string> = range ? { Range: range } : {};
-  const init = (): RequestInit => ({ headers, redirect: 'follow', signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
-  try {
-    return await fetch(url, init());
-  } catch {
-    return await fetch(url, init());
+  // Redirects are followed by hand so every hop is re-checked against the allow-list (an open
+  // redirect on the allowed host must not lead the server anywhere else).
+  const init = (): RequestInit => ({ headers, redirect: 'manual', signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+  let current = url;
+  for (let hop = 0; hop < 4; hop++) {
+    let res: Response;
+    try {
+      res = await fetch(current, init());
+    } catch {
+      res = await fetch(current, init());
+    }
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (!location) return res;
+    const next = allowedUpstream(new URL(location, current).toString());
+    if (!next) throw new Error('redirect outside the allow-list');
+    current = next;
   }
+  throw new Error('too many redirects');
 }
 
 router.get('/pdf', pdfLimiter, async (req, res) => {

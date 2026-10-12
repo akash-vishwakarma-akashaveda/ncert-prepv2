@@ -27,12 +27,17 @@ const STORAGE_KEYS = {
   durations: 'ncert_prep_pomodoro_durations',
 };
 
+// One shared context: browsers (iOS Safari especially) cap how many can exist, and each chime used to make a new one.
+let chimeContext: AudioContext | null = null;
+
 // Web Audio API chime synthesizer for self-contained, offline-ready bell chimes
 export function playPomodoroChime(type: 'focus_end' | 'break_end' = 'focus_end') {
   try {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    chimeContext ??= new AudioContextClass();
+    const ctx = chimeContext;
+    if (ctx.state === 'suspended') void ctx.resume();
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -222,11 +227,23 @@ export function useFocusTimer() {
     }
   }, []);
 
-  // Main countdown tick
+  // Main countdown tick. Counts real elapsed time rather than ticks: browsers slow timers in background
+  // tabs (to once a minute in Chrome), so "one tick = one second" made a 25-minute block run long.
   useEffect(() => {
     if (!running) return;
-    const id = window.setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
-    return () => window.clearInterval(id);
+    let last = Date.now();
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - last) / 1000);
+      if (elapsed <= 0) return;
+      last += elapsed * 1000;
+      setSecondsLeft((s) => Math.max(0, s - elapsed));
+    };
+    const id = window.setInterval(tick, 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, [running]);
 
   // Interval completion. A skipped block moves the cycle on but earns nothing: only a finished focus block counts.

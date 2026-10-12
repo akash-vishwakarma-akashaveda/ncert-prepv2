@@ -192,7 +192,7 @@ export const HomePage: React.FC = () => {
                   <h2 className="text-lg leading-snug">{ann.title}</h2>
                   <p className="text-sm font-semibold opacity-80">{ann.message}</p>
                 </div>
-                {ann.actionLabel && ann.actionUrl && (
+                {ann.actionLabel && ann.actionUrl?.startsWith('/') && !ann.actionUrl.startsWith('//') && (
                   <Link to={ann.actionUrl} className={`${btnAccent} shrink-0`}>
                     {ann.actionLabel} <ArrowRight className="w-4 h-4" />
                   </Link>

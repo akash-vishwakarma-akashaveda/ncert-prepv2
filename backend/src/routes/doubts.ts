@@ -3,12 +3,12 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import type { Server } from 'socket.io';
 import { prisma } from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, requireConsent } from '../middleware/auth.js';
 import { toPublicDoubt } from '../shared/publicDoubt.js';
 import { bumpStat } from '../shared/stats.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireConsent);
 
 /** Any change after creation: admins' lists and badge counts, and the owning student's list, refresh live. */
 function emitDoubtUpdated(req: Request, ownerId: string, doubt: ReturnType<typeof toPublicDoubt>) {
@@ -21,14 +21,16 @@ router.get('/mine', async (req, res) => {
 });
 
 const askSchema = z.object({
-  youtube_id: z.string().min(1),
-  video_title: z.string().min(1),
-  class_sort: z.string().min(1),
-  subject: z.string().min(1),
-  chapter_id: z.string().min(1),
-  chapter_name: z.string().min(1),
+  youtube_id: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
+  video_title: z.string().min(1).max(300),
+  class_sort: z.string().min(1).max(4),
+  subject: z.string().min(1).max(120),
+  chapter_id: z.string().min(1).max(60),
+  chapter_name: z.string().min(1).max(300),
   question: z.string().min(10).max(2000),
 });
+
+const STATUS_FILTER = z.enum(['OPEN', 'ANSWERED', 'CLOSED']);
 
 // Max 10 doubts/day per student.
 const askLimiter = rateLimit({
@@ -43,6 +45,9 @@ router.post('/', askLimiter, async (req, res) => {
   const parsed = askSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { youtube_id, video_title, class_sort, subject, chapter_id, chapter_name, question } = parsed.data;
+  if (!(await prisma.video.findUnique({ where: { youtubeId: youtube_id }, select: { youtubeId: true } }))) {
+    return res.status(404).json({ error: 'Lesson not found' });
+  }
 
   const doubt = await prisma.doubt.create({
     data: {
@@ -63,9 +68,11 @@ router.post('/', askLimiter, async (req, res) => {
 });
 
 router.get('/', requireAdmin, async (req, res) => {
-  const status = typeof req.query.status === 'string' ? req.query.status.toUpperCase() : undefined;
+  const parsedStatus = typeof req.query.status === 'string' ? STATUS_FILTER.safeParse(req.query.status.toUpperCase()) : null;
+  if (parsedStatus && !parsedStatus.success) return res.status(400).json({ error: 'Unknown status' });
+  const status = parsedStatus?.data;
   const rows = await prisma.doubt.findMany({
-    where: status ? { status: status as 'OPEN' | 'ANSWERED' | 'CLOSED' } : undefined,
+    where: status ? { status } : undefined,
     orderBy: { createdAt: 'desc' },
     take: 300,
     include: { user: { select: { displayName: true, email: true } } },
@@ -93,7 +100,7 @@ router.post('/:id/answer', requireAdmin, async (req, res) => {
 
 const statusSchema = z.object({ status: z.enum(['open', 'answered', 'closed']) });
 
-// Students close their own doubts; admins can set any status.
+// Students can only close their own doubts; admins can set any status.
 router.patch('/:id', async (req, res) => {
   const parsed = statusSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -101,6 +108,7 @@ router.patch('/:id', async (req, res) => {
   const existing = await prisma.doubt.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: 'Doubt not found' });
   if (existing.userId !== req.user!.userId && req.user!.role !== 'ADMIN') return res.status(403).json({ error: 'Not your doubt' });
+  if (req.user!.role !== 'ADMIN' && parsed.data.status !== 'closed') return res.status(403).json({ error: 'Students can only close a doubt' });
 
   const doubt = await prisma.doubt.update({
     where: { id: req.params.id },

@@ -26,7 +26,8 @@ import settingsRouter from './routes/settings.js';
 import { sheetSyncRouter } from './routes/sheet-sync.js';
 import { startSheetSyncScheduler } from './shared/sheetScheduler.js';
 import { startReminderScheduler } from './jobs/reminders.js';
-import { SESSION_COOKIE, verifySessionToken } from './middleware/auth.js';
+import { startUnconsentedPurge } from './jobs/purgeUnconsented.js';
+import { SESSION_COOKIE, loadSession } from './middleware/auth.js';
 
 const app = express();
 // Nginx sits in front of this process (see guide/AWS_FROM_SCRATCH.md) and sets X-Forwarded-For.
@@ -36,9 +37,21 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(compression());
 app.use(cors({ origin: process.env.FRONTEND_ORIGIN, credentials: true }));
-// Default 100kb limit is too small for the admin's curriculum batch-create (900+ records at once).
-app.use(express.json({ limit: '5mb' }));
+// Only the admin's bulk routes need big bodies (curriculum batch-create of 900+ records, sheet sync);
+// everything else, public routes included, keeps a small limit. A body parsed here is not re-parsed.
+app.use(['/api/curriculum', '/api/admin/sync-sheet'], express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
+
+// CSRF: the session cookie is SameSite=Lax, and every *.planyt.in site counts as "same site", so a
+// plain HTML form on a sibling subdomain could still POST with the cookie attached. Browsers only let
+// a page add a custom header after a CORS preflight, which only our own origin passes, so requiring
+// one on state-changing requests closes that. The Apps Script sync authenticates with its secret instead.
+const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+app.use('/api', (req, res, next) => {
+  if (!UNSAFE_METHODS.has(req.method) || req.get('X-Requested-With') || req.get('X-Sync-Secret')) return next();
+  res.status(403).json({ error: 'Missing X-Requested-With header' });
+});
 app.use(requestLogger);
 
 app.get('/api/health', async (_req, res) => {
@@ -73,15 +86,13 @@ function readSessionCookie(cookieHeader?: string): string | undefined {
 
 // Every socket authenticates off the same session cookie the REST API uses, then joins its own
 // user-id room (for doubt replies) and the shared "admins" room (for the new-doubt queue).
-io.use((socket, next) => {
+io.use(async (socket, next) => {
   const token = readSessionCookie(socket.handshake.headers.cookie);
-  if (!token) return next(new Error('unauthorized'));
-  try {
-    socket.data.user = verifySessionToken(token);
-    next();
-  } catch {
-    next(new Error('unauthorized'));
-  }
+  // Same check as REST: revoked sessions (logout-all, password reset) and non-session tokens are refused.
+  const session = token ? await loadSession(token).catch(() => null) : null;
+  if (!session) return next(new Error('unauthorized'));
+  socket.data.user = session;
+  next();
 });
 
 io.on('connection', (socket) => {
@@ -90,7 +101,10 @@ io.on('connection', (socket) => {
   if (user.role === 'ADMIN') socket.join('admins');
 });
 
-const port = process.env.PORT ?? 4000;
-httpServer.listen(port, () => logger.info(`API listening on :${port}`));
+const port = Number(process.env.PORT ?? 4000);
+// Production sits behind nginx on the same box, so Node never needs to be reachable from outside.
+const host = process.env.HOST ?? (process.env.NODE_ENV === 'production' ? '127.0.0.1' : undefined);
+httpServer.listen(port, host, () => logger.info(`API listening on ${host ?? '*'}:${port}`));
 startSheetSyncScheduler();
 startReminderScheduler();
+startUnconsentedPurge();

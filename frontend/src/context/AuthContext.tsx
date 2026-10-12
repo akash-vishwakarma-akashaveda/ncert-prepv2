@@ -3,8 +3,9 @@ import { AuthService, BackendUser, toFrontendUser } from '../services/auth';
 import { ApiError } from '../services/api/client';
 import { User } from '../types';
 import { NoticeLang } from '../data/privacyNotice';
-import { nextStreak } from '../data/gamification';
+import { istDateKey } from '../data/gamification';
 import { StatsService } from '../services/stats';
+import { StorageService } from '../services/storage';
 
 interface AuthContextType {
   user: User | null;
@@ -26,6 +27,8 @@ interface AuthContextType {
   // DPDP consent, recorded server-side.
   /** Self-consent for 13 and over; `ageBand` records 13–17 vs 18+. */
   giveAdultConsent: (language: NoticeLang, ageBand?: '13-17' | 'adult') => Promise<void>;
+  /** Agree to the current privacy notice after it changed (consent itself is already on record). */
+  renewConsent: () => Promise<void>;
   giveMinorConsent: (body: { ageBand: 'under13'; parentName: string; parentEmail: string; parentPhone: string; language: NoticeLang }) => Promise<void>;
   requestParentConsent: (parentName: string, parentEmail: string, language: NoticeLang) => Promise<string>;
   signOut: () => Promise<void>;
@@ -56,8 +59,6 @@ function toBackendProfileUpdate(updates: Partial<Omit<User, 'role' | 'userId'>>)
   if (updates.stream !== undefined) out.stream = updates.stream ?? '';
   if (updates.last_watched_video !== undefined && updates.last_watched_video !== null) out.lastWatchedVideo = updates.last_watched_video;
   if (updates.onboarding_completed !== undefined) out.onboardingCompleted = updates.onboarding_completed;
-  if (updates.streak_days !== undefined) out.streak = updates.streak_days;
-  if (updates.last_active_date !== undefined) out.lastActiveDate = updates.last_active_date;
   return out;
 }
 
@@ -179,6 +180,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return backendUser.emailVerified;
   }, []);
 
+  const renewConsent = useCallback(async () => {
+    applyBackendUser(await AuthService.renewConsent());
+  }, []);
+
   const giveAdultConsent = useCallback(async (language: NoticeLang, ageBand: '13-17' | 'adult' = 'adult') => {
     const backendUser = await AuthService.giveAdultConsent(language, ageBand);
     applyBackendUser(backendUser);
@@ -202,10 +207,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.warn('Sign out error:', err);
     }
+    if (user) StorageService.clearUserData(user.userId);
     setUser(null);
     setAuthProvider(null);
     setLoading(false);
-  }, []);
+  }, [user]);
 
   const signOutAllDevices = useCallback(async () => {
     setLoading(true);
@@ -243,10 +249,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const recordStudyActivity = useCallback(async () => {
     if (!user) return;
-    const next = nextStreak(user);
-    if (next.last_active_date === user.last_active_date && next.streak_days === user.streak_days) return;
-    await updateProfile(next);
-  }, [user, updateProfile]);
+    // Once a day is enough: the server ignores repeats, this just saves the request.
+    if (user.last_active_date === istDateKey(Date.now())) return;
+    applyBackendUser(await AuthService.recordActivity());
+  }, [user]);
 
   // Throws Error('requires-recent-login') when the server wants a fresh sign-in first.
   const deleteAccount = useCallback(async () => {
@@ -257,6 +263,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (err instanceof ApiError && err.message === 'requires-recent-login') throw new Error('requires-recent-login');
       throw new Error('We could not finish deleting your account. Please try again; if it keeps failing, contact privacy support.');
     }
+    StorageService.clearUserData(user.userId);
     setUser(null);
     setAuthProvider(null);
   }, [user]);
@@ -294,6 +301,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resendVerification,
         refreshEmailVerified,
         giveAdultConsent,
+        renewConsent,
         giveMinorConsent,
         requestParentConsent,
         signOut,

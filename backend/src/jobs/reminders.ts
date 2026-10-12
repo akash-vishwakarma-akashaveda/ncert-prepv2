@@ -1,3 +1,4 @@
+import jwt from 'jsonwebtoken';
 import { prisma } from '../db.js';
 import { logger } from '../shared/logger.js';
 import { sendEmail, type EmailContent } from '../shared/email.js';
@@ -22,11 +23,17 @@ export function isDue(u: { reminderFrequency: string; reminderHour: number | nul
   return (u.reminderHour ?? DEFAULT_HOUR[freq]) === slot.hour;
 }
 
-async function reminderContent(u: { lastWatchedVideo: string | null; streak: number; reminderFrequency: string }): Promise<[string, EmailContent]> {
+/** Long-lived on purpose: an unsubscribe link must keep working for as long as the emails it is in. */
+function unsubscribeUrl(userId: string): string {
+  const token = jwt.sign({ userId, purpose: 'unsubscribe' }, process.env.SESSION_SECRET!);
+  return `${process.env.FRONTEND_ORIGIN}/unsubscribe?token=${token}`;
+}
+
+async function reminderContent(u: { id: string; lastWatchedVideo: string | null; streak: number; reminderFrequency: string }): Promise<[string, EmailContent]> {
   const app = process.env.FRONTEND_ORIGIN;
   const video = u.lastWatchedVideo ? await prisma.video.findUnique({ where: { youtubeId: u.lastWatchedVideo } }) : null;
   const streakLine = u.streak > 1 ? [`You are on a ${u.streak}-day study streak. Keep it going!`] : [];
-  const secondary = { label: 'Change or turn off reminders', url: `${app}/app/reminders` };
+  const secondary = { label: 'Unsubscribe from reminder emails', url: unsubscribeUrl(u.id) };
   const footnote = `You asked for ${u.reminderFrequency === 'weekly' ? 'a weekly' : 'a daily'} revision reminder.`;
 
   if (video && video.isActive) {
@@ -55,9 +62,11 @@ export async function sendDueReminders(now = new Date()) {
     where: {
       role: 'STUDENT',
       remindersEnabled: true,
-      // Only mail addresses we know are real, and minors only after a parent approved the account.
+      // Only mail addresses we know are real, and minors only after a parent approved the account:
+      // an under-13 who gave a parent's details is "parent_notified" until the parent confirms.
       emailVerified: true,
       consentStatus: 'GRANTED',
+      NOT: [{ consentMethod: 'parent_notified' }],
       OR: [{ reminderHour: slot.hour }, { reminderHour: null }],
       AND: [{ OR: [{ lastReminderAt: null }, { lastReminderAt: { lt: slot.dayStart } }] }],
     },

@@ -139,6 +139,11 @@ export const StorageService = {
       localStorage.removeItem(`quickprep_xp_history_${userId}`);
       localStorage.removeItem(`quickprep_xp_total_${userId}`);
       localStorage.removeItem(`ncert_prep_onboarded_${userId}`);
+      // Anything else keyed by this account (badges seen, pomodoro task, ...), and the visit log,
+      // which lists signed-in user ids. Device preferences such as the sidebar state are kept.
+      for (const key of Object.keys(localStorage)) {
+        if (key.includes(userId) || key === 'ncert_prep_visit_reported') localStorage.removeItem(key);
+      }
     } catch (e) {
       console.warn('Failed to clear user data:', e);
     }

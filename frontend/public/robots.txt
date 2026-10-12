@@ -4,4 +4,4 @@ Disallow: /app
 Disallow: /admin
 Disallow: /parent-consent
 
-Sitemap: https://ncert-prep.akashaveda.com/sitemap.xml
+Sitemap: https://ncertprep.planyt.in/sitemap.xml

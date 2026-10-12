@@ -6,6 +6,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist/types/src/display/api';
 import { API_URL } from '../../services/api/client';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -40,6 +41,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url, title, subtitle, onCl
   const [current, setCurrent] = useState(1);
   const scrollRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
 
   useEffect(() => {
     const task = pdfjs.getDocument({
@@ -75,16 +77,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url, title, subtitle, onCl
 
   // Close on Escape, lock the page behind the viewer, and start keyboard focus inside it.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    closeRef.current?.focus();
     return () => {
-      window.removeEventListener('keydown', onKey);
       document.body.style.overflow = overflow;
     };
-  }, [onClose]);
+  }, []);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -100,7 +98,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ url, title, subtitle, onCl
   const changeZoom = (delta: number) => setZoom((z) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round((z + delta) * 10) / 10)));
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-[#1E2233]/80 backdrop-blur-xs sm:p-4" role="dialog" aria-modal="true" aria-label={title}>
+    <div ref={dialogRef} tabIndex={-1} className="fixed inset-0 z-[60] flex flex-col bg-[#1E2233]/80 backdrop-blur-xs sm:p-4" role="dialog" aria-modal="true" aria-label={title}>
       <div className="bg-white sm:rounded-[22px] sm:border-[3px] border-[color:var(--card-line)] flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2.5 border-b-2 border-[#E3E5EC] shrink-0">
           <span className="hidden sm:flex w-9 h-9 rounded-xl bg-[#FFE9E2] text-[#C24A2C] items-center justify-center shrink-0">
@@ -198,6 +196,7 @@ const PdfPage: React.FC<{
 }> = ({ doc, pageNumber, scale, fallbackSize, root, onVisible }) => {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
   const [near, setNear] = useState(false);
   const [size, setSize] = useState(fallbackSize);
   const [drawn, setDrawn] = useState(false);
@@ -224,6 +223,15 @@ const PdfPage: React.FC<{
     if (!canvas) return null;
     const page = await doc.getPage(pageNumber);
     const viewport = page.getViewport({ scale });
+    // Selectable, screen-reader-readable text over the canvas (transparent spans, sized by --scale-factor).
+    const textDiv = textRef.current;
+    if (textDiv) {
+      textDiv.replaceChildren();
+      textDiv.style.setProperty('--scale-factor', String(scale));
+      void new pdfjs.TextLayer({ textContentSource: page.streamTextContent(), container: textDiv, viewport })
+        .render()
+        .catch(() => undefined);
+    }
     const ratio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
     canvas.width = Math.floor(viewport.width * ratio);
     canvas.height = Math.floor(viewport.height * ratio);
@@ -240,6 +248,7 @@ const PdfPage: React.FC<{
     const canvas = canvasRef.current;
     if (!near) {
       if (canvas) canvas.width = canvas.height = 0; // release the bitmap
+      textRef.current?.replaceChildren();
       setDrawn(false);
       return;
     }
@@ -247,7 +256,11 @@ const PdfPage: React.FC<{
     let cancelled = false;
     // Debounce so a quick fling past pages, or a run of zoom taps, does not queue throwaway renders.
     const timer = setTimeout(async () => {
-      task = await draw();
+      try {
+        task = await draw();
+      } catch {
+        return; // the document was closed (viewer dismissed) while this page was loading
+      }
       if (cancelled) return task?.cancel();
       task?.promise.then(
         () => !cancelled && setDrawn(true),
@@ -268,7 +281,8 @@ const PdfPage: React.FC<{
       style={{ width: size.w * scale, height: size.h * scale }}
       aria-label={`Page ${pageNumber}`}
     >
-      <canvas ref={canvasRef} className="block w-full h-full" />
+      <canvas ref={canvasRef} className="block w-full h-full" aria-hidden="true" />
+      <div ref={textRef} className="textLayer" />
       {!drawn && (
         <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-[#9AA1B4]">
           {near ? <Loader2 className="w-5 h-5 animate-spin" /> : pageNumber}

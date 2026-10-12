@@ -3,6 +3,7 @@ import { Search, X, Video as VideoIcon, Book, SearchX } from 'lucide-react';
 import { useSearch } from '../../hooks/useSearch';
 import { Video } from '../../types';
 import { getClassTileStyle } from '../../data/colorTokens';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 interface SearchResultsModalProps {
   isOpen: boolean;
@@ -19,6 +20,8 @@ export const SearchResultsModal: React.FC<SearchResultsModalProps> = ({
 }) => {
   const { query, setQuery, results, isSearching } = useSearch(videos, { maxResults: 10 });
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen);
 
   useEffect(() => {
     if (isOpen) {
@@ -59,6 +62,8 @@ export const SearchResultsModal: React.FC<SearchResultsModalProps> = ({
       onMouseDown={onClose}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Search lessons"

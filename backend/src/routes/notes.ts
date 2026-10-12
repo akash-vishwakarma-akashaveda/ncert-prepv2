@@ -63,7 +63,9 @@ const noteSchema = z.object({
   formulas: z.array(z.string()).default([]),
   exam_tips: z.array(z.string()).default([]),
   attachments: z.array(z.object({
-    name: z.string(), url: z.string(), path: z.string(), contentType: z.string(), size: z.number(), uploaded_at: z.number(),
+    // Opened by students: only real https links (the S3 public URL), never javascript: or http:.
+    name: z.string().max(200), url: z.string().max(1000).url().startsWith('https://'), path: z.string().max(500),
+    contentType: z.string().max(100), size: z.number().int().min(0), uploaded_at: z.number(),
   })).default([]),
   isPublished: z.boolean().default(false),
 });

@@ -11,7 +11,7 @@ export function toCsvExportUrl(input: string): string {
 /** Fetches the sheet as CSV text. Throws with a message safe to show the admin. */
 export async function fetchSheetCsv(sheetUrl: string): Promise<string> {
   const csvUrl = toCsvExportUrl(sheetUrl);
-  const res = await fetch(csvUrl, { redirect: 'follow' });
+  const res = await fetch(csvUrl, { redirect: 'follow', signal: AbortSignal.timeout(30_000) });
   if (!res.ok) {
     throw new Error(
       res.status === 401 || res.status === 403

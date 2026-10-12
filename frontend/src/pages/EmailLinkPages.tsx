@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { AlertCircle, CheckCircle2, KeyRound, MailCheck } from 'lucide-react';
+import { AlertCircle, BellOff, CheckCircle2, KeyRound, MailCheck } from 'lucide-react';
 import { AuthService } from '../services/auth';
 import { useAuth } from '../context/AuthContext';
 
@@ -17,6 +17,40 @@ const ErrorLine: React.FC<{ text: string }> = ({ text }) => (
     <AlertCircle className="w-4 h-4 shrink-0" /> {text}
   </p>
 );
+
+// Reminder emails link here (backend/src/jobs/reminders.ts); one click, no sign-in.
+export const UnsubscribePage: React.FC = () => {
+  const [params] = useSearchParams();
+  const token = params.get('token') || '';
+  const [state, setState] = useState<'working' | 'done' | 'failed'>('working');
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    AuthService.unsubscribe(token)
+      .then(() => setState('done'))
+      .catch(() => setState('failed'));
+  }, [token]);
+
+  return (
+    <div className={box}>
+      <span className={badge}>
+        <BellOff className="w-6 h-6" />
+      </span>
+      <h1 className="text-[26px] leading-tight">
+        {state === 'working' ? 'Turning off reminders…' : state === 'done' ? 'You are unsubscribed' : 'This link did not work'}
+      </h1>
+      {state === 'done' && <p className="text-sm text-[#6B7280]">We will not send you revision reminder emails any more. You can turn them back on any time in the app under Reminders.</p>}
+      {state === 'failed' && <ErrorLine text="The link is invalid. Sign in and turn off reminders under Reminders instead." />}
+      {state !== 'working' && (
+        <Link to="/" className={primary}>
+          <CheckCircle2 className="w-4 h-4 mr-2" /> Go to NCERT Prep
+        </Link>
+      )}
+    </div>
+  );
+};
 
 export const VerifyEmailPage: React.FC = () => {
   const [params] = useSearchParams();

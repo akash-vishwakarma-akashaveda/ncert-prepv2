@@ -179,7 +179,7 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
       message: ann.message,
       // No read tracking for announcements, so they never count as "new" (the bell only counts real replies).
       unread: false,
-      actionUrl: ann.actionUrl || '/app',
+      actionUrl: ann.actionUrl?.startsWith('/') && !ann.actionUrl.startsWith('//') ? ann.actionUrl : '/app',
       badgeLabel: ann.tone.toUpperCase(),
       icon: toneIcon,
       iconBg: ann.tone === 'exam' ? 'bg-[#FFF0CF]' : 'bg-[#E0F1FF]',

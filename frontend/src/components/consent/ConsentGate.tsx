@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Mail, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { NOTICE, NoticeLang } from '../../data/privacyNotice';
+import { NOTICE, NOTICE_VERSION, NoticeLang } from '../../data/privacyNotice';
 import { useConfirm } from '../../pages/admin/adminUi';
 
 export const NoticeView: React.FC<{ lang: NoticeLang; onLang?: (l: NoticeLang) => void; compact?: boolean }> = ({ lang, onLang, compact }) => {
@@ -83,7 +83,7 @@ const input = 'w-full px-4 py-3 text-sm font-bold border-2 border-[#E3E5EC] roun
  */
 export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const {
-    user, emailVerified, resendVerification, refreshEmailVerified, giveAdultConsent, giveMinorConsent, requestParentConsent,
+    user, emailVerified, resendVerification, refreshEmailVerified, giveAdultConsent, giveMinorConsent, requestParentConsent, renewConsent,
     signOut, deleteAccount,
   } = useAuth();
   const [lang, setLang] = useState<NoticeLang>(user?.consent?.language || 'en');
@@ -101,7 +101,8 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
   const { confirm, confirmNode } = useConfirm();
 
   if (!user) return null;
-  if (emailVerified && user.consent?.status === 'granted') return <>{children}</>;
+  const granted = emailVerified && user.consent?.status === 'granted';
+  if (granted && user.consent?.notice_version === NOTICE_VERSION) return <>{children}</>;
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -176,11 +177,11 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
       <Shell
         icon={<Clock className="w-6 h-6" />}
         title="Waiting for your parent or guardian"
-        body={`We emailed ${user.consent.parent_name} at ${user.consent.parent_email}. As soon as they approve, your account opens. The link is valid for 7 days.`}
+        body={`We emailed ${user.consent.parent_name} at ${user.consent.parent_email}. As soon as they approve, your account opens. The link is valid for 14 days.`}
       >
         {alerts}
         <div className="rounded-[18px] bg-[#FFF6E2] border-2 border-[#FFD97A] p-4 text-[13px] font-semibold text-[#8A5A14] space-y-1">
-          <p>Ask them to open the email from NCERT Prep and sign in with that same email address.</p>
+          <p>Ask them to open the email from NCERT Prep and tap the link. They do not need to sign in.</p>
           <p>Until they decide, we don't use any of your data. If nobody approves within 30 days, the account is deleted.</p>
         </div>
         <div className="flex flex-wrap gap-2.5">
@@ -196,6 +197,28 @@ export const ConsentGate: React.FC<{ children: React.ReactNode }> = ({ children 
           </button>
         </div>
         {footer}
+      </Shell>
+    );
+  }
+
+  // Consent is on record but for an older notice: show what changed and ask once more.
+  if (granted) {
+    return (
+      <Shell
+        icon={<ShieldCheck className="w-6 h-6" />}
+        title={lang === 'en' ? 'Our privacy notice has changed' : 'हमारी गोपनीयता सूचना बदल गई है'}
+        body={lang === 'en' ? 'Please read the updated notice. Your account and progress stay as they are.' : 'कृपया नई सूचना पढ़ें। आपका खाता और प्रगति वैसे ही रहेंगे।'}
+      >
+        <NoticeView lang={lang} onLang={setLang} compact />
+        {alerts}
+        <div className="flex flex-wrap gap-2.5">
+          <button disabled={busy} onClick={() => run(renewConsent)} className={primary}>
+            {busy ? 'Saving…' : lang === 'en' ? 'I agree, continue' : 'सहमत हूँ, आगे बढ़ें'}
+          </button>
+          <button onClick={decline} className={quiet}>
+            {lang === 'en' ? "I don't agree, delete my account" : 'सहमत नहीं, मेरा खाता हटाएँ'}
+          </button>
+        </div>
       </Shell>
     );
   }

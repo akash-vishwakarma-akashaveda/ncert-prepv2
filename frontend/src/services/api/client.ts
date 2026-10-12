@@ -19,7 +19,8 @@ export class ApiError extends Error {
 const http = axios.create({
   baseURL: API_URL,
   withCredentials: true, // send/receive the session cookie across the frontend/backend ports
-  headers: { 'Content-Type': 'application/json' },
+  // X-Requested-With is required by the API on every state-changing request (its CSRF guard).
+  headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
 });
 
 function toApiError(err: unknown): ApiError {

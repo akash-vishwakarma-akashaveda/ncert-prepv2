@@ -96,6 +96,13 @@ sheetSyncRouter.delete('/url', requireAuth, requireAdmin, async (_req: Request, 
 sheetSyncRouter.post('/upload', requireAuth, requireAdmin, upload.single('file'), async (req: Request, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded (expected field "file").' });
 
+  // Real Excel files only: .xlsx is a zip (PK..), .xls an OLE container (D0 CF 11 E0). A CSV renamed
+  // to .xlsx would otherwise be read in the wrong text encoding and garble every non-ASCII title.
+  const magic = req.file.buffer.subarray(0, 4).toString('hex');
+  if (magic !== '504b0304' && magic !== 'd0cf11e0') {
+    return res.status(400).json({ error: 'That is not an Excel file. Save it as .xlsx and upload again.' });
+  }
+
   let workbook: WorkBook;
   try {
     workbook = readWorkbook(req.file.buffer, { type: 'buffer' });

@@ -3,6 +3,7 @@ import { PartyPopper, X } from 'lucide-react';
 import { BadgeDef } from '../../data/badges';
 import { EducationalStage, getStageConfig } from '../../data/stageThemes';
 import { playCelebrationSound } from '../../services/notificationSound';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 interface BadgeUnlockModalProps {
   badge: BadgeDef;
@@ -24,6 +25,7 @@ const CONFETTI_COLORS = ['#FFC53D', '#FF7A59', '#12A594', '#3B4FE0', '#C9447F'];
 
 export const BadgeUnlockModal: React.FC<BadgeUnlockModalProps> = ({ badge, classSort, stage, onClose }) => {
   const theme = getStageConfig(classSort);
+  const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
   const Icon = badge.Icon;
 
   useEffect(() => {
@@ -58,6 +60,8 @@ export const BadgeUnlockModal: React.FC<BadgeUnlockModalProps> = ({ badge, class
   return (
     <div
       className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-[#1E2233]/70 backdrop-blur-xs animate-in fade-in duration-200"
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label={`Badge unlocked: ${badge.name[stage]}`}

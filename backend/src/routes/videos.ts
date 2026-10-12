@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import { prisma } from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, loadSession, SESSION_COOKIE } from '../middleware/auth.js';
 import { toPublicVideo, toPrismaVideoData } from '../shared/publicVideo.js';
 
 const router = Router();
@@ -10,10 +10,15 @@ const router = Router();
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 const todayUtc = () => new Date().toISOString().slice(0, 10);
 
-// Public: the full catalogue, including hidden/inactive videos — the frontend filters those out
-// for the student-facing views itself (useCatalog.ts) and needs them for the admin table.
-router.get('/', async (_req, res) => {
-  const videos = await prisma.video.findMany({ orderBy: [{ classSort: 'asc' }, { subject: 'asc' }, { chapterId: 'asc' }] });
+// Public: the live catalogue. Hidden (inactive) lessons are only included for admins, who manage them
+// in the admin table; everyone else never learns their ids.
+router.get('/', async (req, res) => {
+  const token = req.cookies?.[SESSION_COOKIE];
+  const session = token ? await loadSession(token) : null;
+  const videos = await prisma.video.findMany({
+    where: session?.role === 'ADMIN' ? undefined : { isActive: true },
+    orderBy: [{ classSort: 'asc' }, { subject: 'asc' }, { chapterId: 'asc' }],
+  });
   res.json(videos.map(toPublicVideo));
 });
 
@@ -170,7 +175,8 @@ router.delete('/:youtubeId', requireAuth, requireAdmin, async (req, res) => {
 const heartbeatSchema = z.object({ seconds: z.number().int().min(1).max(45) });
 // No auth: visitors watch too, and this feeds a revenue-hours estimate that should count them.
 // Rate limit + per-ping cap bound how much a spammer could inflate it.
-const heartbeatLimiter = rateLimit({ windowMs: 5 * 60 * 1000, limit: 600, standardHeaders: true, legacyHeaders: false });
+// One ping per 45 s of playback is ~7 per 5 minutes; 60 leaves room for a few tabs, not for a script.
+const heartbeatLimiter = rateLimit({ windowMs: 5 * 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false });
 
 router.post('/:youtubeId/watch-heartbeat', heartbeatLimiter, async (req, res) => {
   const parsed = heartbeatSchema.safeParse(req.body);

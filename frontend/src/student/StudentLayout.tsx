@@ -51,6 +51,7 @@ import { GoodiesMarquee } from '../components/common/GoodiesMarquee';
 import { ProgressBar, card, lessonPath, pill } from './ui';
 import { useCourse } from './useCourse';
 import { UserAvatar } from '../data/avatars';
+import { useModalFocus } from '../hooks/useModalFocus';
 
 export interface StudentOutletContext {
   timer: FocusTimer;
@@ -94,6 +95,7 @@ export const StudentLayout: React.FC = () => {
   });
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useModalFocus<HTMLDivElement>(drawerOpen, () => setDrawerOpen(false));
   const [searchOpen, setSearchOpen] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(() => {
@@ -464,7 +466,7 @@ export const StudentLayout: React.FC = () => {
       </aside>
 
       {drawerOpen && (
-        <div className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Menu">
+        <div ref={drawerRef} tabIndex={-1} className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Menu">
           <button className="absolute inset-0 bg-[#1E2233]/50 cursor-default" aria-label="Close menu" onClick={() => setDrawerOpen(false)} />
           <div className="absolute inset-y-0 left-0 w-72 max-w-[85vw] shadow-xl">{sidebar(false)}</div>
         </div>

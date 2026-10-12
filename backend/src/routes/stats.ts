@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { prisma } from '../db.js';
 import { requireAuth, requireAdmin, SESSION_COOKIE, verifySessionToken } from '../middleware/auth.js';
 import { bumpStat } from '../shared/stats.js';
@@ -12,7 +13,10 @@ function istDay(offsetDays = 0): string {
 
 // Public — visitors aren't signed in. The client already dedupes "once per IST day" itself
 // (localStorage); this just bumps whichever counters apply to this call.
-router.post('/track-visit', async (req, res) => {
+// The browser reports once per day; a few per hour per IP covers shared school networks, not scripts.
+const visitLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
+
+router.post('/track-visit', visitLimiter, async (req, res) => {
   void bumpStat('visitors');
   const token = req.cookies?.[SESSION_COOKIE];
   if (token) {

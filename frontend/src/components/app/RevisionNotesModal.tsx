@@ -13,6 +13,7 @@ import {
 import { ChapterNotes, NoteAttachment, NotesTarget } from '../../types';
 import { NotesService, openAttachment } from '../../services/content';
 import { notesKey } from '../../data/curriculumKeys';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 interface RevisionNotesModalProps {
   isOpen: boolean;
@@ -188,6 +189,7 @@ export const ChapterNotesContent: React.FC<{ notes: ChapterNotes | null; loading
 
 export const RevisionNotesModal: React.FC<RevisionNotesModalProps> = ({ isOpen, onClose, target, previewNotes }) => {
   const { notes, loading } = useChapterNotes(target, isOpen, previewNotes);
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -201,6 +203,8 @@ export const RevisionNotesModal: React.FC<RevisionNotesModalProps> = ({ isOpen, 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E2233]/60 backdrop-blur-xs animate-in fade-in"
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="notes-title"

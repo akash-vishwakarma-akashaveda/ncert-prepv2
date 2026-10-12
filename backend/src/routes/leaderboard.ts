@@ -1,30 +1,32 @@
 import { Router } from 'express';
 import { prisma } from '../db.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireConsent } from '../middleware/auth.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireConsent);
 
 // Computed live from the XP ledger and lesson progress — no separate leaderboard table to keep
-// in sync. Own class only, unless a specific classSort is requested (matching a student picking
-// a different class to browse, same as the old Firestore behaviour).
+// in sync. Students see their own enrolled class only (single-class enrolment: classmates' names
+// and photos are not shown to other classes); admins can pass ?classSort= to view any class.
 router.get('/', async (req, res) => {
-  const classSortParam = typeof req.query.classSort === 'string' ? req.query.classSort : undefined;
-  let classSort = classSortParam;
-  if (!classSort) {
+  const classSortParam = typeof req.query.classSort === 'string' ? req.query.classSort.slice(0, 4) : undefined;
+  let classSort: string;
+  if (req.user!.role === 'ADMIN' && classSortParam) {
+    classSort = classSortParam;
+  } else {
     const me = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { classGrade: true } });
     if (me?.classGrade == null) return res.json([]);
     classSort = String(me.classGrade).padStart(2, '0');
   }
 
-  // Current per-class XP balance = each user's most recent transaction in this class.
-  const transactions = await prisma.xpTransaction.findMany({
-    where: { classSort },
-    orderBy: { createdAt: 'asc' },
-    select: { userId: true, balanceAfter: true },
-  });
-  const xpByUser = new Map<string, number>();
-  for (const t of transactions) xpByUser.set(t.userId, t.balanceAfter); // last write per user wins
+  // Current per-class XP balance = each user's most recent transaction in this class, picked by the
+  // database (one row per user) instead of loading the class's whole ledger into memory.
+  const latest = await prisma.$queryRaw<{ userId: string; balanceAfter: number }[]>`
+    SELECT DISTINCT ON ("userId") "userId", "balanceAfter"
+    FROM "XpTransaction"
+    WHERE "classSort" = ${classSort}
+    ORDER BY "userId", "createdAt" DESC`;
+  const xpByUser = new Map<string, number>(latest.map((t) => [t.userId, t.balanceAfter]));
 
   // Completed lessons in this class.
   const classVideos = await prisma.video.findMany({ where: { classSort }, select: { youtubeId: true } });

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Play, Pause, RotateCcw, SkipForward, Maximize2, Minimize2, X, GripHorizontal, Coffee, Target, Trees } from 'lucide-react';
 import { FocusMode, FocusTimer } from '../../student/useFocusTimer';
@@ -51,12 +51,14 @@ export const FloatingPomodoroWidget: React.FC<{ timer: FocusTimer }> = ({ timer 
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
-  // Re-clamp when the widget changes size (pill <-> card) so it never ends up off screen.
-  useEffect(() => {
-    setPosition((p) => (p ? clamp(p.x, p.y) : p));
-  }, [timer.isMinimized]);
+  // Re-clamp whenever the widget appears or changes size (pill <-> card), before paint, so a position
+  // saved on a wider screen never leaves it off screen (it is not mounted on /app/focus or when hidden).
+  const visible = timer.isFloating && location.pathname !== '/app/focus';
+  useLayoutEffect(() => {
+    if (visible) setPosition((p) => (p ? clamp(p.x, p.y) : p));
+  }, [timer.isMinimized, visible]);
 
-  if (!timer.isFloating || location.pathname === '/app/focus') return null;
+  if (!visible) return null;
 
   // The whole widget is a drag handle, buttons included: the pill is almost all buttons, so
   // skipping them left only a few pixels to grab. Pointer capture starts only once the press has

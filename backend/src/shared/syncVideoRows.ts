@@ -63,8 +63,24 @@ export async function syncVideoRows(rows: SheetRow[]): Promise<SyncResult> {
   let skipped = 0;
   const errors: string[] = [];
 
-  for (const raw of rows) {
-    const youtubeId = (raw.youtube_id ?? '').trim();
+  for (const input of rows) {
+    // JSON callers can send numbers or nulls where text is expected; normalise every field to text
+    // so one bad row is reported instead of crashing the whole sync half way through.
+    const text = (v: unknown) => (v == null ? '' : String(v));
+    const raw: SheetRow = {
+      youtube_id: text(input?.youtube_id),
+      class_sort: text(input?.class_sort),
+      class_display: text(input?.class_display),
+      subject: text(input?.subject),
+      textbook: text(input?.textbook),
+      chapter_id: text(input?.chapter_id),
+      chapter_name: text(input?.chapter_name),
+      video_title: text(input?.video_title),
+      yt_public: input?.yt_public,
+      pdf_url: text(input?.pdf_url),
+      timestamps: text(input?.timestamps),
+    };
+    const youtubeId = raw.youtube_id.trim();
     if (!/^[A-Za-z0-9_-]{11}$/.test(youtubeId)) {
       errors.push(`Skipped invalid youtubeId: "${youtubeId}"`);
       continue;

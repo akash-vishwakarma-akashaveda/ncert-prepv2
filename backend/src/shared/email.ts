@@ -54,11 +54,15 @@ export function renderEmailText({ heading, lines, action, footnote, secondary }:
 export async function sendEmail(to: string, subject: string, content: EmailContent): Promise<boolean> {
   const from = process.env.SES_FROM_EMAIL;
   const text = renderEmailText(content);
+  const production = process.env.NODE_ENV === 'production';
+  // Logs never carry a full address in production (PII), and never a mail body (it holds sign-in links).
+  const maskedTo = production ? to.replace(/^(.).*@/, '$1***@') : to;
   if (!from) {
     // Local dev has no SES: the link is logged so flows can be tested, and counts as sent. In
     // production an unset sender is a real misconfiguration, so it reports failure to the user.
-    logger.warn({ to, subject, body: text }, '[email] not sent (SES_FROM_EMAIL unset) — logging instead');
-    return process.env.NODE_ENV !== 'production';
+    if (production) logger.error({ to: maskedTo, subject }, '[email] not sent: SES_FROM_EMAIL is not set');
+    else logger.warn({ to, subject, body: text }, '[email] not sent (SES_FROM_EMAIL unset) — logging instead');
+    return !production;
   }
 
   try {
@@ -77,7 +81,7 @@ export async function sendEmail(to: string, subject: string, content: EmailConte
     );
     return true;
   } catch (err) {
-    logger.error({ err, to, subject }, '[email] SES send failed');
+    logger.error({ err, to: maskedTo, subject }, '[email] SES send failed');
     return false;
   }
 }

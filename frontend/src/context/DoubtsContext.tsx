@@ -27,9 +27,13 @@ export const DoubtsProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return;
     }
     let cancelled = false;
-    DoubtsService.fetchMine().then((rows) => {
-      if (!cancelled) setMyDoubts(rows);
-    });
+    DoubtsService.fetchMine()
+      .then((rows) => {
+        if (!cancelled) setMyDoubts(rows);
+      })
+      .catch(() => {
+        // Offline or not consented yet: keep the list empty; the next sign-in/refresh reloads it.
+      });
 
     // Live updates when an educator replies — the socket authenticates off the session cookie
     // and the server puts this connection in a room named after this user's id.

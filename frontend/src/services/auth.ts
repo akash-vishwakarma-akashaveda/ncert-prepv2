@@ -178,10 +178,14 @@ export const AuthService = {
   },
 
   updateProfile: (updates: Record<string, unknown>) => api.patch<BackendUser>('/api/users/me/profile', updates),
+  // The server keeps the streak (it used to be computed here and sent, which let anyone set any streak).
+  recordActivity: () => api.post<BackendUser>('/api/progress/activity', {}),
+  unsubscribe: (token: string) => api.post<{ ok: true }>('/api/auth/unsubscribe', { token }),
   updateSettings: (settings: Record<string, unknown>) => api.patch<BackendUser>('/api/users/me/settings', settings),
   applyReferralCode: (code: string) => api.post<BackendUser>('/api/users/me/referral', { code }),
   giveMinorConsent: (body: { ageBand: 'under13'; parentName: string; parentEmail: string; parentPhone: string; language: string }) =>
     api.post<BackendUser>('/api/users/me/consent/minor', { ...body, agreed: true }),
+  renewConsent: () => api.post<BackendUser>('/api/users/me/consent/renew', {}),
   giveAdultConsent: (language: string, ageBand: '13-17' | 'adult' = 'adult') =>
     api.post<BackendUser>('/api/users/me/consent/adult', { language, ageBand }),
   requestParentConsent: (parentName: string, parentEmail: string, language: string) =>

@@ -663,3 +663,38 @@ body {
   box-shadow: 0 4px 0 #E0A81F;
   transform: translateY(-10px);
 }
+
+/* PDF.js text layer (copied from pdfjs-dist/web/pdf_viewer.css): transparent, selectable text over each
+   page canvas so screen readers can read textbook pages and students can select/copy text. */
+.textLayer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 0;
+}
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+}
+.textLayer span.markedContent {
+  top: 0;
+  height: 0;
+}
+.textLayer ::selection {
+  background: rgba(0 0 255 / 0.25);
+}

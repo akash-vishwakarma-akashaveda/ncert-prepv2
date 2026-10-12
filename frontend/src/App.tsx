@@ -15,7 +15,7 @@ import { DemoPage } from './pages/DemoPage';
 import { PrivacyPage } from './pages/PrivacyPage';
 import { SubscribePill } from './components/common/SubscribePill';
 import { ParentConsentPage } from './pages/ParentConsentPage';
-import { ResetPasswordPage, VerifyEmailPage } from './pages/EmailLinkPages';
+import { ResetPasswordPage, UnsubscribePage, VerifyEmailPage } from './pages/EmailLinkPages';
 import { StudentLayout } from './student/StudentLayout';
 import { HomePage } from './student/pages/HomePage';
 import { SubjectDetailPage, SubjectsPage } from './student/pages/SubjectsPage';
@@ -27,7 +27,7 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 type PublicTab = 'home' | 'browse' | 'demo' | 'profile' | 'privacy';
 const FULL_BLEED = ['/', '/demo'];
-const OPEN_WHEN_SIGNED_IN = ['/privacy', '/demo', '/browse', '/parent-consent', '/verify-email', '/reset-password'];
+const OPEN_WHEN_SIGNED_IN = ['/privacy', '/demo', '/browse', '/parent-consent', '/verify-email', '/reset-password', '/unsubscribe'];
 const PUBLIC_PATHS: Partial<Record<PublicTab, string>> = { home: '/', browse: '/browse', demo: '/demo', privacy: '/privacy', profile: '/app' };
 
 // Visitor pages: landing, syllabus explorer, privacy, public lesson view.
@@ -149,6 +149,7 @@ export const App: React.FC = () => (
                 <Route path="/parent-consent" element={<ParentConsentPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/unsubscribe" element={<UnsubscribePage />} />
                 <Route path="/watch/:videoId" element={<LessonPage publicMode />} />
               </Route>
 

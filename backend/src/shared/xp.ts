@@ -3,6 +3,15 @@ import type { Prisma, XpSourceType } from '@prisma/client';
 type Tx = Prisma.TransactionClient;
 
 /**
+ * Takes a per-user lock for the rest of the transaction. Every XP-changing transaction calls this
+ * first, so one student's awards run one at a time: no double award from parallel requests, and
+ * User.xp never drifts from the ledger. Other students are not blocked.
+ */
+export async function lockUserXp(tx: Tx, userId: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}))`;
+}
+
+/**
  * Records one XP transaction, scoped to a class, and keeps User.xp (the global, cross-class
  * total shown on the profile) in sync. Never lets a class balance or the global total go
  * negative — a reversal just can't take a student below 0 for that class.

@@ -3,10 +3,10 @@ import { z } from 'zod';
 import rateLimit from 'express-rate-limit';
 import type { Server } from 'socket.io';
 import { prisma } from '../db.js';
-import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, requireConsent } from '../middleware/auth.js';
 
 const router = Router();
-router.use(requireAuth);
+router.use(requireAuth, requireConsent);
 
 function toPublicFeedback(f: { id: string; userId: string; youtubeId: string; message: string; status: string; createdAt: Date; user?: { displayName: string | null; email: string } }) {
   return {
@@ -20,7 +20,8 @@ function toPublicFeedback(f: { id: string; userId: string; youtubeId: string; me
   };
 }
 
-const submitSchema = z.object({ youtubeId: z.string().min(1), message: z.string().min(1).max(1000) });
+const submitSchema = z.object({ youtubeId: z.string().regex(/^[A-Za-z0-9_-]{11}$/), message: z.string().min(1).max(1000) });
+const statusSchema = z.enum(['NEW', 'REVIEWED']);
 
 // Max 5 submissions/hour per user.
 const submitLimiter = rateLimit({
@@ -42,9 +43,11 @@ router.post('/', submitLimiter, async (req, res) => {
 });
 
 router.get('/', requireAdmin, async (req, res) => {
-  const status = typeof req.query.status === 'string' ? req.query.status.toUpperCase() : undefined;
+  const parsedStatus = typeof req.query.status === 'string' ? statusSchema.safeParse(req.query.status.toUpperCase()) : null;
+  if (parsedStatus && !parsedStatus.success) return res.status(400).json({ error: 'Unknown status' });
+  const status = parsedStatus?.data;
   const rows = await prisma.feedback.findMany({
-    where: status ? { status: status as 'NEW' | 'REVIEWED' } : undefined,
+    where: status ? { status } : undefined,
     orderBy: { createdAt: 'desc' },
     include: { user: { select: { displayName: true, email: true } } },
   });
@@ -52,7 +55,9 @@ router.get('/', requireAdmin, async (req, res) => {
 });
 
 router.patch('/:id', requireAdmin, async (req, res) => {
-  const status = req.body?.status === 'new' ? 'NEW' : 'REVIEWED';
+  const parsed = z.object({ status: z.enum(['new', 'reviewed']) }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'status must be "new" or "reviewed"' });
+  const status = parsed.data.status === 'new' ? 'NEW' : 'REVIEWED';
   const feedback = await prisma.feedback.update({ where: { id: req.params.id }, data: { status } });
   (req.app.get('io') as Server | undefined)?.to('admins').emit('feedback:changed');
   res.json(toPublicFeedback(feedback));

@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { prisma } from '../db.js';
-import { requireAuth, requireAdmin, clearSessionCookie } from '../middleware/auth.js';
+import rateLimit from 'express-rate-limit';
+import { requireAuth, requireAdmin, requireConsent, clearSessionCookie } from '../middleware/auth.js';
 import { sendEmail } from '../shared/email.js';
 import { eraseUser } from '../shared/erase-user.js';
 import { toPublicUser } from '../shared/publicUser.js';
@@ -12,7 +13,25 @@ const RECENT_LOGIN_WINDOW_SECONDS = 5 * 60;
 const router = Router();
 router.use(requireAuth);
 
-const NOTICE_VERSION = process.env.DPDP_NOTICE_VERSION ?? '2026-01';
+// Must match NOTICE_VERSION in frontend/src/data/privacyNotice.ts; the app asks for consent again
+// whenever the version a user consented to is older than the current one.
+const NOTICE_VERSION = process.env.DPDP_NOTICE_VERSION ?? '2026-10';
+
+// Every consent route can email a parent: cap them per account so they cannot be used to spam.
+const consentEmailLimiter = rateLimit({
+  windowMs: 24 * 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user!.userId,
+  message: { error: 'Too many requests today. Try again tomorrow.' },
+});
+
+/** Consent is only taken from an account whose email is confirmed (Google sign-ins always are). */
+async function emailVerified(userId: string): Promise<boolean> {
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { emailVerified: true } });
+  return Boolean(me?.emailVerified);
+}
 
 router.get('/count-by-class', requireAdmin, async (_req, res) => {
   const groups = await prisma.user.groupBy({ by: ['classGrade'], _count: { _all: true } });
@@ -31,9 +50,11 @@ router.get('/me/referral-stats', async (req, res) => {
 
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  // Only real sign-ups count: a confirmed email and recorded consent, so throwaway accounts do not.
+  const real = { referredByCode: user.referralCode, emailVerified: true, consentStatus: 'GRANTED' as const };
   const [referredThisMonth, referredTotal] = await Promise.all([
-    prisma.user.count({ where: { referredByCode: user.referralCode, createdAt: { gte: monthStart } } }),
-    prisma.user.count({ where: { referredByCode: user.referralCode } }),
+    prisma.user.count({ where: { ...real, createdAt: { gte: monthStart } } }),
+    prisma.user.count({ where: real }),
   ]);
   res.json({ code: user.referralCode, referredThisMonth, referredTotal });
 });
@@ -54,7 +75,7 @@ router.get('/referrals', requireAdmin, async (req, res) => {
 
   const grouped = await prisma.user.groupBy({
     by: ['referredByCode'],
-    where: { referredByCode: { not: null }, createdAt: { gte: monthStart, lt: monthEnd } },
+    where: { referredByCode: { not: null }, emailVerified: true, consentStatus: 'GRANTED', createdAt: { gte: monthStart, lt: monthEnd } },
     _count: { _all: true },
   });
   if (grouped.length === 0) return res.json({ month: label, rows: [] });
@@ -83,26 +104,32 @@ router.get('/referrals', requireAdmin, async (req, res) => {
 
 const CONSENT_REQUEST_TTL_DAYS = 14;
 
+// A built-in avatar id like "owl" (frontend data/avatars.tsx), or a Google profile photo. Nothing else:
+// the photo is shown to classmates on the leaderboard, so it must not point at an arbitrary server.
+const GOOGLE_PHOTO = /^https:\/\/lh\d\.googleusercontent\.com\/[^\s"'<>]+$/;
+const AVATAR_ID = /^[a-z0-9-]{1,30}$/;
+
+// Text without control characters (NUL bytes break Postgres text columns).
+const plainText = (max: number) => z.string().max(max).refine((v) => !/[\u0000-\u001f]/.test(v), 'Invalid characters');
+
 const profileSchema = z.object({
-  displayName: z.string().min(1).max(80).optional(),
-  // Either a real Google profile picture URL, or a built-in avatar id like "owl" (data/avatars.tsx)
-  // — not always a URL, so no .url() constraint.
-  photoUrl: z.string().max(500).optional(),
-  phoneNumber: z.string().optional(),
+  displayName: plainText(80).pipe(z.string().min(1)).optional(),
+  photoUrl: z.string().max(500).refine((v) => AVATAR_ID.test(v) || GOOGLE_PHOTO.test(v), 'Choose one of the avatars').optional(),
   // '' clears it.
-  city: z.string().trim().max(80).optional(),
+  phoneNumber: z.string().trim().regex(/^(\+?[0-9][0-9\s-]{6,18})?$/, 'Enter a valid phone number').optional(),
+  city: z.string().trim().max(80).refine((v) => !/[\u0000-\u001f]/.test(v), 'Invalid characters').optional(),
   classGrade: z.number().int().min(1).max(12).optional(),
-  studyGoalMinutes: z.number().int().min(0).optional(),
-  focusSubjects: z.array(z.string()).optional(),
+  studyGoalMinutes: z.number().int().min(0).max(24 * 60).optional(),
+  focusSubjects: z.array(plainText(60)).max(30).optional(),
   // '' clears the choice; the frontend's STREAMS list is the source of these ids.
   stream: z.enum(['science', 'commerce', 'humanities', '']).optional(),
-  lastWatchedVideo: z.string().optional(),
-  onboardingCompleted: z.boolean().optional(),
-  streak: z.number().int().min(0).optional(),
-  lastActiveDate: z.string().optional(),
+  lastWatchedVideo: z.string().regex(/^([A-Za-z0-9_-]{11})?$/).optional(),
+  // One-way: setup cannot be reopened (that would reopen the once-only referral window).
+  onboardingCompleted: z.boolean().transform((v) => v || undefined).optional(),
+  // streak / lastActiveDate are server-owned now: POST /api/progress/activity maintains them.
 });
 
-router.patch('/me/profile', async (req, res) => {
+router.patch('/me/profile', requireConsent, async (req, res) => {
   const parsed = profileSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   // '' means "no stream": store it as null rather than an empty string nothing else understands.
@@ -124,7 +151,7 @@ const referralSchema = z.object({ code: z.string().trim().min(1).max(20) });
  * A new account can add the code of whoever referred it, once, during setup. This covers Google sign-ups,
  * which never see the register form's referral field.
  */
-router.post('/me/referral', async (req, res) => {
+router.post('/me/referral', requireConsent, async (req, res) => {
   const parsed = referralSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Enter a referral code' });
   const code = parsed.data.code.toUpperCase();
@@ -133,9 +160,18 @@ router.post('/me/referral', async (req, res) => {
   if (me.referredByCode) return res.status(409).json({ error: 'A referral code is already on your account' });
   if (me.onboardingCompleted) return res.status(409).json({ error: 'Referral codes can only be added while setting up a new account' });
   if (me.referralCode === code) return res.status(400).json({ error: 'You cannot use your own referral code' });
-  const referrer = await prisma.user.findUnique({ where: { referralCode: code }, select: { id: true } });
+  const referrer = await prisma.user.findUnique({ where: { referralCode: code }, select: { id: true, referredByCode: true } });
   if (!referrer) return res.status(400).json({ error: 'That referral code was not found' });
-  const user = await prisma.user.update({ where: { id: me.id }, data: { referredByCode: code } });
+  if (me.referralCode && referrer.referredByCode === me.referralCode) {
+    return res.status(400).json({ error: 'You cannot use the code of someone you referred' });
+  }
+  // Conditional write: of several parallel requests only one can set the code.
+  const { count } = await prisma.user.updateMany({
+    where: { id: me.id, referredByCode: null, onboardingCompleted: false },
+    data: { referredByCode: code },
+  });
+  if (count !== 1) return res.status(409).json({ error: 'A referral code is already on your account' });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: me.id } });
   res.json(toPublicUser(user));
 });
 
@@ -145,7 +181,7 @@ const settingsSchema = z.object({
   reminderHour: z.number().int().min(0).max(23).optional(),
 });
 
-router.patch('/me/settings', async (req, res) => {
+router.patch('/me/settings', requireConsent, async (req, res) => {
   const parsed = settingsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const user = await prisma.user.update({ where: { id: req.user!.userId }, data: parsed.data });
@@ -161,6 +197,17 @@ const adultConsentSchema = z.object({
 router.post('/me/consent/adult', async (req, res) => {
   const parsed = adultConsentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const userId = req.user!.userId;
+  if (!(await emailVerified(userId))) return res.status(403).json({ error: 'Confirm your email address first.' });
+  const me = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { classGrade: true, consentAgeGroup: true, consentMethod: true } });
+  // Self-consent is for 13 and over. It cannot replace a parent's consent already on record (an
+  // under-13 cannot "become" an adult to drop the parent), and the class must fit the age given.
+  if (me.consentMethod === 'parent' || me.consentMethod === 'parent_notified' || me.consentAgeGroup === 'under13' || me.consentAgeGroup === 'child') {
+    return res.status(409).json({ error: "Your parent's details are already on your account." });
+  }
+  if (me.classGrade != null && (me.classGrade <= 6 || (parsed.data.ageBand === 'adult' && me.classGrade <= 10))) {
+    return res.status(400).json({ error: 'For your class, a parent needs to give their details.' });
+  }
   const user = await prisma.user.update({
     where: { id: req.user!.userId },
     data: {
@@ -175,6 +222,18 @@ router.post('/me/consent/adult', async (req, res) => {
   res.json(toPublicUser(user));
 });
 
+// The notice changed since this account consented: record agreement to the current version. Only for
+// an account that already has consent; how it consented (self, or a parent's details) is unchanged.
+router.post('/me/consent/renew', async (req, res) => {
+  const { count } = await prisma.user.updateMany({
+    where: { id: req.user!.userId, consentStatus: 'GRANTED' },
+    data: { consentNoticeVersion: NOTICE_VERSION },
+  });
+  if (count !== 1) return res.status(409).json({ error: 'No consent on record to renew' });
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: req.user!.userId } });
+  res.json(toPublicUser(user));
+});
+
 const OWN_EMAIL_ERROR = "Use your parent's or guardian's email address, not your own.";
 
 /** A parent's email that is the student's own would let the student approve themselves. */
@@ -184,15 +243,16 @@ async function isOwnEmail(userId: string, email: string): Promise<boolean> {
 }
 
 const parentConsentSchema = z.object({
-  parentName: z.string().min(1),
-  parentEmail: z.string().email(),
+  parentName: z.string().trim().min(1).max(80),
+  parentEmail: z.string().trim().toLowerCase().email().max(254),
   language: z.enum(['en', 'hi']).default('en'),
 });
 
-router.post('/me/consent/parent-request', async (req, res) => {
+router.post('/me/consent/parent-request', consentEmailLimiter, async (req, res) => {
   const parsed = parentConsentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { parentName, parentEmail, language } = parsed.data;
+  if (!(await emailVerified(req.user!.userId))) return res.status(403).json({ error: 'Confirm your email address first.' });
   if (await isOwnEmail(req.user!.userId, parentEmail)) return res.status(400).json({ error: OWN_EMAIL_ERROR });
 
   const token = randomBytes(24).toString('base64url');
@@ -234,7 +294,7 @@ const minorConsentSchema = z.object({
   // Only under-13s give a parent's details; 13 and over consent for themselves (/me/consent/adult).
   ageBand: z.enum(['under13']),
   parentName: z.string().trim().min(1).max(80),
-  parentEmail: z.string().trim().email(),
+  parentEmail: z.string().trim().toLowerCase().email().max(254),
   parentPhone: z.string().trim().regex(/^\+?[0-9][0-9\s-]{6,18}$/, 'Enter a valid phone number'),
   agreed: z.literal(true),
   language: z.enum(['en', 'hi']).default('en'),
@@ -245,10 +305,11 @@ const minorConsentSchema = z.object({
  * the parent agrees, and can start straight away. The parent gets a one-tap link to confirm (or refuse,
  * which erases the account) — the emailed link is the verification; no parent account is needed.
  */
-router.post('/me/consent/minor', async (req, res) => {
+router.post('/me/consent/minor', consentEmailLimiter, async (req, res) => {
   const parsed = minorConsentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Check the parent details' });
   const { ageBand, parentName, parentEmail, parentPhone, language } = parsed.data;
+  if (!(await emailVerified(req.user!.userId))) return res.status(403).json({ error: 'Confirm your email address first.' });
   if (await isOwnEmail(req.user!.userId, parentEmail)) return res.status(400).json({ error: OWN_EMAIL_ERROR });
 
   const token = randomBytes(24).toString('base64url');

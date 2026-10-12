@@ -12,7 +12,7 @@ interface PrivacyPageProps {
 const MORE: [string, string][] = [
   [
     'How consent works',
-    'We ask for consent right after you sign in, before using any other data. Adults consent themselves. For anyone under 18 we email the parent or guardian they name; that adult must sign in with that email, confirm they are the parent or lawful guardian and 18+, and approve. Until then the account cannot be used. If nobody approves within 30 days, the account is deleted.',
+    'We ask for consent right after you sign in, before using any other data. Students aged 13 and over agree for themselves. A student under 13 gives a parent or guardian’s name, email and phone; we email that parent a link (no sign-in needed) to confirm the account or refuse it, and refusing deletes it. An account that never gives consent is deleted after 30 days.',
   ],
   [
     'Sign-in',
@@ -20,7 +20,7 @@ const MORE: [string, string][] = [
   ],
   [
     'Children',
-    'We do not track children, profile their behaviour or show them advertising. A child’s browser is never linked to their account in our visitor counts.',
+    'We do not track children, profile their behaviour or show our own advertising. Lesson videos play from YouTube, which may show its own ads. Visitor counts are totals only.',
   ],
   [
     'Videos',

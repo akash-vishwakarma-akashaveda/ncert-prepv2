@@ -4,6 +4,7 @@ import { X, AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, Gift } from 'luci
 import { LogoMark } from '../common/Logo';
 import { preloadGoogleSignIn } from '../../services/auth';
 import { useAuth } from '../../context/AuthContext';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 interface AuthPagesProps {
   onSuccess?: () => void;
@@ -77,6 +78,14 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
   useEffect(() => {
     if (!isModal || authModalOpen) preloadGoogleSignIn();
   }, [isModal, authModalOpen]);
+
+  const dialogRef = useModalFocus<HTMLDivElement>(isModal && authModalOpen, () => {
+    setMode('signin');
+    setError(null);
+    setInfo(null);
+    setPassword('');
+    setAuthModalOpen(false);
+  });
 
   if (isModal && !authModalOpen) return null;
 
@@ -271,7 +280,7 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
         <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[color:var(--brand)]">
           privacy notice
         </a>{' '}
-        and choose whether to consent. Under 18? A parent or guardian must approve.
+        and choose whether to consent. Under 13? We'll ask for a parent or guardian's details.
       </p>
     </div>
   );
@@ -281,7 +290,7 @@ export const AuthPages: React.FC<AuthPagesProps> = ({ onSuccess, isModal = true 
   return (
     // The overlay scrolls, not the card: a scrollbar inside the rounded card poked out past its
     // corners on the taller sign-up form. my-auto keeps short forms centred.
-    <div className="fixed inset-0 z-50 flex overflow-y-auto p-4 bg-[#1E2233]/50 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Sign in" onClick={close}>
+    <div className="fixed inset-0 z-50 flex overflow-y-auto p-4 bg-[#1E2233]/50 backdrop-blur-xs" ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Sign in" onClick={close}>
       <div className="w-full max-w-[440px] m-auto" onClick={(e) => e.stopPropagation()}>
         {content}
       </div>

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { STREAMS, StreamId, classHasStreams, getStream, isInStream } from '../../data/streams';
 import { ClassTile } from '../home/ClassGrid';
 import { REMINDER_HOURS, formatHour, reminderHour, reminderSummary } from '../profile/ReminderSettingsCard';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 interface OnboardingWizardProps {
   isOpen: boolean;
@@ -36,6 +37,8 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [referralError, setReferralError] = useState('');
 
   // The wizard stays mounted, so re-seed from the latest profile each time it opens.
+  const dialogRef = useModalFocus<HTMLDivElement>(isOpen);
+
   useEffect(() => {
     if (!isOpen) return;
     setStep(1);
@@ -149,7 +152,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E2233]/50 backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Set up your account">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E2233]/50 backdrop-blur-xs" ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label="Set up your account">
       <div className="relative w-full max-w-[620px] max-h-[92vh] flex flex-col bg-white rounded-[32px] border-[3px] border-[color:var(--card-line)] shadow-[0_8px_0_#E3E5EC] animate-pop-soft">
         <div className="px-6 sm:px-8 pt-6 sm:pt-7 space-y-4">
           <div className="flex items-center gap-2">
