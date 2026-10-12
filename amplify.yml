@@ -25,4 +25,4 @@ applications:
       cache:
         paths:
           - node_modules/**/*
-    # Response headers (security headers, CSP, caching) live in frontend/customHttp.yml.
+    # Response headers (security headers, CSP, caching) live in customHttp.yml at the repo root.
